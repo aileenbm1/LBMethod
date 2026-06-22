@@ -1,0 +1,66 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-ink: #17120d;
+  --brand-accent: #a87d49;
+  --brand-paper: #f4f1ea;
+  --brand-line: #e7e1d6;
+  font-family: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--brand-ink);
+  background-color: var(--brand-paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--brand-paper);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Serif display face for headings */
+.font-display {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+
+::selection {
+  background: #17120d;
+  color: #f4f1ea;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8d0c2;
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@keyframes fadeSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lb-enter {
+  animation: fadeSlideUp 420ms ease-out;
+}

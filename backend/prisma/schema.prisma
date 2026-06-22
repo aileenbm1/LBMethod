@@ -1,0 +1,362 @@
+// LBMethodEngine - Prisma schema
+// Database: PostgreSQL
+// Domain: female glute-hypertrophy / lower-body training programming.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Goal {
+  glute_hypertrophy
+  glute_growth
+  lower_body_focus
+  fat_loss
+  body_recomposition
+  muscle_gain
+}
+
+enum ExperienceLevel {
+  beginner
+  intermediate
+  advanced
+}
+
+enum MovementPattern {
+  hip_thrust
+  hip_hinge
+  knee_dominant
+  abduction
+  unilateral
+  horizontal_push
+  vertical_push
+  horizontal_pull
+  vertical_pull
+  core
+}
+
+enum ExerciseCategory {
+  compound
+  unilateral
+  isolation
+  accessory
+}
+
+enum Equipment {
+  barbell
+  dumbbell
+  machine
+  cable
+  smith
+  bodyweight
+  band
+  kettlebell
+}
+
+enum Difficulty {
+  beginner
+  intermediate
+  advanced
+}
+
+enum DayFocus {
+  glute_hamstring
+  glute_quad
+  glute_specialization
+  glute_heavy
+  glute_metabolic
+  upper_body
+  back_shoulder
+  back_biceps
+  shoulder_triceps
+  chest_triceps
+  full_leg
+  legs_push
+  rest
+}
+
+enum SelectionRole {
+  main
+  unilateral
+  isolation
+  accessory
+}
+
+enum LimitationSeverity {
+  mild     // puede hacer el ejercicio con modificaciones
+  moderate // evitar el patrón de movimiento completo
+  severe   // evitar toda la zona
+}
+
+enum TrainingLocation {
+  gym
+  home
+}
+
+enum Gender {
+  female
+  male
+  unspecified
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Coach {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String?
+  goal            Goal
+  experienceLevel ExperienceLevel
+  daysPerWeek     Int              @default(4)
+  bodyweightKg    Float?
+  // Medidas corporales
+  heightCm        Float?
+  bodyFatPct      Float?
+  hipCm           Float?
+  waistCm         Float?
+  thighCm         Float?
+  // Notas libres del coach
+  notes           String?
+  trainingLocation  TrainingLocation  @default(gym)
+  gender            Gender            @default(unspecified)
+  sessionDuration   Int               @default(60)
+  // PIN de acceso que el coach entrega a la clienta (opcional)
+  pin             String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  routines        Routine[]
+  history         TrainingHistory[]
+  volumeTargets   VolumeTarget[]
+  fatigueProfile  FatigueProfile?
+  weakPoints      WeakPoint[]
+  limitations     Limitation[]
+  conversation    Conversation?
+  exerciseLogs    ExerciseLog[]
+}
+
+model Exercise {
+  id                   String          @id @default(cuid())
+  name                 String          @unique
+  muscleGroup          String
+  movementPattern      MovementPattern
+  category             ExerciseCategory
+  equipment            Equipment
+  difficulty           Difficulty
+  activationScore      Float
+  fatigueScore         Float
+  stabilityRequirement Float
+  unilateral           Boolean         @default(false)
+  primaryMuscle        String
+  secondaryMuscles     String[]
+  imageUrl             String?         // URL de imagen o GIF demostrativo
+  videoUrl             String?         // URL de video (YouTube embed, etc.)
+  createdAt            DateTime        @default(now())
+
+  selections           ExerciseSelection[]
+}
+
+model Routine {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal        Goal
+  level       ExperienceLevel
+  daysPerWeek Int
+  weekNumber  Int           @default(1)
+  mesocycle   Int           @default(1)
+  rir         Int // target RIR for the week
+  deload      Boolean       @default(false)
+  weeklyGluteSets Int
+  lowerVolumePct  Float
+  upperVolumePct  Float
+  createdAt   DateTime      @default(now())
+
+  days        WorkoutDay[]
+  progressions Progression[]
+}
+
+model WorkoutDay {
+  id           String       @id @default(cuid())
+  routineId    String
+  routine      Routine      @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  dayIndex     Int
+  focus        DayFocus
+  sessionFatigue Float
+  totalSets    Int
+
+  selections   ExerciseSelection[]
+
+  @@unique([routineId, dayIndex])
+}
+
+model ExerciseSelection {
+  id           String        @id @default(cuid())
+  workoutDayId String
+  workoutDay   WorkoutDay    @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise      @relation(fields: [exerciseId], references: [id])
+  role         SelectionRole
+  sets         Int
+  repsMin      Int
+  repsMax      Int
+  rir          Int
+  order        Int
+}
+
+// Snapshot of a generated multi-week plan (a "Workout" = a full program block).
+model Workout {
+  id          String   @id @default(cuid())
+  name        String
+  goal        Goal
+  level       ExperienceLevel
+  daysPerWeek Int
+  totalWeeks  Int      @default(4)
+  payload     Json // serialized full program for fast retrieval
+  createdAt   DateTime @default(now())
+}
+
+model Progression {
+  id         String   @id @default(cuid())
+  routineId  String
+  routine    Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  week       Int
+  rir        Int
+  volumeMultiplier Float
+  deload     Boolean  @default(false)
+  notes      String?
+}
+
+model TrainingHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId   String?
+  weekNumber  Int
+  exerciseSignature String // hash of weekly exercise combination, prevents repeats
+  totalVolume Int
+  avgFatigue  Float
+  createdAt   DateTime @default(now())
+
+  @@index([userId, exerciseSignature])
+}
+
+model VolumeTarget {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  muscleGroup String
+  minSets    Int
+  maxSets    Int
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, muscleGroup])
+}
+
+model FatigueProfile {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  maxSessionFatigue Float @default(12)
+  recoveryRate  Float   @default(1.0)
+  createdAt     DateTime @default(now())
+}
+
+// Grupo muscular subdesarrollado que el motor debe priorizar con volumen extra
+model WeakPoint {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  muscleGroup String  // e.g. "glute_medius", "hamstring", "quad"
+  priority    Int     @default(1) // 1=leve, 2=moderado, 3=prioritario
+
+  @@unique([userId, muscleGroup])
+}
+
+// Lesión o limitación física que restringe ciertos patrones de movimiento
+model Limitation {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description      String
+  affectedPatterns MovementPattern[]
+  severity         LimitationSeverity @default(moderate)
+}
+
+// ---------------------------------------------------------------------------
+// Registro de ejercicios (pesos, repeticiones por sesión)
+// ---------------------------------------------------------------------------
+
+model ExerciseLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekNumber   Int
+  dayIndex     Int
+  exerciseName String
+  setsData     Json     // SetLog[]: [{ setNumber, reps, weightKg, completed }]
+  notes        String?
+  loggedAt     DateTime @default(now()) @updatedAt
+
+  @@unique([userId, weekNumber, dayIndex, exerciseName])
+  @@index([userId, weekNumber, dayIndex])
+  @@index([userId, exerciseName])
+}
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
+enum MessageSenderRole {
+  coach
+  client
+}
+
+enum MediaType {
+  image
+  video
+  document
+  audio
+}
+
+// Una conversación por cliente (siempre con el coach)
+model Conversation {
+  id        String    @id @default(cuid())
+  clientId  String    @unique
+  client    User      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+model Message {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderRole     MessageSenderRole
+  content        String?           // texto del mensaje
+  mediaUrl       String?           // ruta del archivo subido o URL externa
+  mediaType      MediaType?
+  mediaFilename  String?           // nombre original del archivo
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+}

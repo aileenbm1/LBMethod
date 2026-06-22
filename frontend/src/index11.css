@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-ink: #111827;
+  --brand-accent: #b08a57;
+  --brand-mist: #f1f5f9;
+  font-family: "Avenir Next", "Nunito Sans", "Segoe UI", sans-serif;
+  color: var(--brand-ink);
+  background-color: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 14%, rgba(176, 138, 87, 0.18), transparent 30%),
+    radial-gradient(circle at 88% 18%, rgba(17, 24, 39, 0.08), transparent 34%),
+    linear-gradient(135deg, #ffffff 0%, #f8fafc 46%, #eef2f7 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes floatSoft {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes fadeSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lb-float {
+  animation: floatSoft 6s ease-in-out infinite;
+}
+
+.lb-enter {
+  animation: fadeSlideUp 420ms ease-out;
+}

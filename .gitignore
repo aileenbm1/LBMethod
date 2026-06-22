@@ -1,0 +1,47 @@
+# ── Dependencias ──────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Variables de entorno (NUNCA subir) ────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+
+# ── Builds ────────────────────────────────────────────────
+dist/
+build/
+out/
+
+# ── Prisma ────────────────────────────────────────────────
+prisma/dev.db
+prisma/*.db-journal
+backend/node_modules/.prisma/
+
+# ── Uploads (archivos de usuarios) ────────────────────────
+backend/uploads/
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+lerna-debug.log*
+coverage/
+
+# ── OS ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.sw?
+
+# ── Temporales y respaldos ────────────────────────────────
+tmp_frames/
+*.tmp
+LBMETHOD
+frontend/RoutineGenerator111.tsx
