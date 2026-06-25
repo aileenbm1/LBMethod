@@ -3,6 +3,7 @@
     "target": "ES2021",
     "module": "CommonJS",
     "moduleResolution": "node",
+    "ignoreDeprecations": "5.0",
     "lib": ["ES2021"],
     "outDir": "dist",
     "rootDir": ".",
