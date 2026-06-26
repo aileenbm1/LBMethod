@@ -1005,20 +1005,8 @@ export default function RoutineGenerator() {
 
       <div className="flex flex-1 basis-[420px] items-center justify-center px-6 py-10 sm:px-8">
         <div className="lb-enter w-full max-w-[392px]">
-          <h2 className="font-display text-[34px] font-semibold tracking-tight text-[#17120d]">Bienvenida</h2>
-          <p className="mt-2 text-sm text-[#8c8377]">Accede como coach o cliente.</p>
-
-          {/* Selector Coach / Cliente — oculto durante 2FA */}
-          {!twoFactorPending && (
-            <div className="mt-6 flex gap-1.5 rounded-2xl bg-[#ece6db] p-1.5">
-              {(["coach","client"] as AuthRole[]).map(r=>(
-                <button key={r} onClick={()=>{setAuthRole(r);setError(null);setLoginLockedUntil(null);}}
-                  className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${authRole===r?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>
-                  {r==="coach"?"Coach":"Cliente"}
-                </button>
-              ))}
-            </div>
-          )}
+          <h2 className="font-display text-[34px] font-semibold tracking-tight text-[#17120d]">Inicio de sesión</h2>
+          <p className="mt-2 text-sm text-[#8c8377]">Bienvenida de vuelta.</p>
 
           {/* Pantalla 2FA */}
           {twoFactorPending && (
@@ -1060,11 +1048,11 @@ export default function RoutineGenerator() {
             </div>
           )}
 
-          {/* Formulario normal */}
+          {/* Formulario coach (default) */}
           {!twoFactorPending && !loginLockedUntil && authRole==="coach" && (
             <div className="mt-5 space-y-3">
-              <label className="block"><span className={labelCls}>Email</span>
-                <input className={inputCls} placeholder="coach@lbmethod.com" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/>
+              <label className="block"><span className={labelCls}>Correo electrónico</span>
+                <input className={inputCls} placeholder="correo@ejemplo.com" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/>
               </label>
               <label className="block"><span className={labelCls}>Contraseña</span>
                 <input className={inputCls} type="password" placeholder="••••••••" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/>
@@ -1072,6 +1060,7 @@ export default function RoutineGenerator() {
             </div>
           )}
 
+          {/* Formulario cliente (PIN) */}
           {!twoFactorPending && !loginLockedUntil && authRole==="client" && (
             <div className="mt-5 space-y-4">
               <label className="block">
@@ -1079,25 +1068,30 @@ export default function RoutineGenerator() {
                 <input className={inputCls} type="text" autoComplete="username"
                   placeholder="Ej. maria@correo.com  o  María García"
                   value={loginIdentifier} onChange={e=>setLoginIdentifier(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/>
-                <span className="mt-1 block text-[11px] text-[#b3aa9b]">Usa el correo, nombre o ID que te dio tu coach.</span>
+                <span className="mt-1 block text-[11px] text-[#b3aa9b]">Usa el dato que te compartió tu coach.</span>
               </label>
               <label className="block">
                 <span className={labelCls}>PIN de acceso</span>
                 <input className={`${inputCls} font-mono tracking-[0.12em]`} type="password" autoComplete="current-password"
                   maxLength={12} placeholder="••••••••"
                   value={loginPin} onChange={e=>setLoginPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/>
-                <span className="mt-1 block text-[11px] text-[#b3aa9b]">PIN proporcionado por tu coach al crear tu perfil.</span>
               </label>
             </div>
           )}
 
           {!twoFactorPending && error && <p className="mt-3 rounded-xl bg-[#f7ece6] p-2.5 text-sm text-[#9a4b34]">{error}</p>}
           {!twoFactorPending && !loginLockedUntil && (
-            <button onClick={login} className={`mt-5 w-full py-3.5 ${primaryBtn}`}>Entrar</button>
+            <button onClick={login} className={`mt-5 w-full py-3.5 ${primaryBtn}`}>Iniciar sesión</button>
           )}
 
-          {!twoFactorPending && authRole==="client" && (
-            <p className="mt-5 text-center text-[12px] text-[#a39a8d]">Tu coach te proporcionará tu nombre de usuario y PIN de acceso.</p>
+          {/* Cambio de modo — discreto */}
+          {!twoFactorPending && !loginLockedUntil && (
+            <p className="mt-5 text-center text-[12px] text-[#a39a8d]">
+              {authRole==="coach"
+                ? <><span>¿Eres cliente? </span><button onClick={()=>{setAuthRole("client");setError(null);setLoginLockedUntil(null);}} className="text-[#a87d49] hover:underline">Entra con tu PIN</button></>
+                : <button onClick={()=>{setAuthRole("coach");setError(null);setLoginLockedUntil(null);}} className="text-[#a87d49] hover:underline">← Volver</button>
+              }
+            </p>
           )}
         </div>
       </div>
