@@ -23,6 +23,9 @@ export function createApp(
   const app = express();
 
   // ── Seguridad: headers HTTP (XSS, clickjacking, sniffing) ──────────────────
+  // Render (y la mayoría de hosts) usan proxies inversos — necesario para rate-limit
+  app.set("trust proxy", 1);
+
   app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }, // permite GIFs de ejercicios
     contentSecurityPolicy: false, // desactivado: la app es solo API, no sirve HTML
