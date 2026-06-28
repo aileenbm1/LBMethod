@@ -134,7 +134,7 @@ const FOCUS_LABELS: Record<string,string> = {
   full_leg:"Pierna completa", legs_push:"Cuádriceps · Pierna",
 };
 const PORTAL_TABS: {id: PortalTab; label: string}[] = [
-  {id:"rutina", label:"Mi rutina"}, {id:"registrar", label:"Registrar sesión"},
+  {id:"rutina", label:"Mi entrenamiento"},
   {id:"chat", label:"Chat coach"}, {id:"historial", label:"Historial"},
 ];
 
@@ -465,6 +465,8 @@ export default function RoutineGenerator() {
   const [wizTrainingLocation, setWizTrainingLocation] = useState<TrainingLocation>("gym");
   const [wizWeak, setWizWeak] = useState<WeakPoint[]>([]);
   const [wizPatterns, setWizPatterns] = useState<MovementPattern[]>([]);
+  const [wizInjuries, setWizInjuries] = useState<Set<string>>(new Set());
+  const [wizMonthsTrained, setWizMonthsTrained] = useState<string>("");
   const [wizSeverity, setWizSeverity] = useState<LimitationSeverity>("mild");
   const [wizLimitDesc, setWizLimitDesc] = useState("");
 
@@ -773,7 +775,7 @@ export default function RoutineGenerator() {
   const portalClientId = authSession?.role==="client"?authSession.clientId:selectedClientId;
 
   useEffect(()=>{
-    if(portalTab!=="registrar"||!portalClientId)return;
+    if((portalTab!=="registrar"&&portalTab!=="rutina")||!portalClientId)return;
     setSavedExercises(new Set());setSessionComplete(false);
     const client=clients.find(c=>c.id===portalClientId);
     if(!client?.program)return;
@@ -848,7 +850,11 @@ export default function RoutineGenerator() {
     setDuplicateWarning(null);
     setLoading(true);
     try{
-      const res=await apiFetch("/usuario",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,goal,experienceLevel,daysPerWeek,gender:wizGender,sessionDuration:wizSessionDuration,trainingLocation:wizTrainingLocation})});
+      const injuryNotes=[...wizInjuries].length>0?`Lesiones/molestias: ${[...wizInjuries].join(", ")}.`:"";
+      const historyNotes=wizMonthsTrained?`Historial: ${wizMonthsTrained}.`:"";
+      const notes=[injuryNotes,historyNotes].filter(Boolean).join(" ")||undefined;
+      const injuryLimitations=[...wizInjuries].map(zone=>({description:`Molestia en ${zone}`,affectedPatterns:["knee_dominant","hip_hinge","hip_thrust","unilateral","horizontal_push","vertical_push","horizontal_pull","vertical_pull"].slice(0,2),severity:"mild" as const}));
+      const res=await apiFetch("/usuario",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,goal,experienceLevel,daysPerWeek,gender:wizGender,sessionDuration:wizSessionDuration,trainingLocation:wizTrainingLocation,notes,limitations:injuryLimitations.length>0?injuryLimitations:undefined})});
       if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d?.message??`Error ${res.status}`);}
       const data=await res.json() as {usuario:{id:string};generatedPin?:string};
       if(data.generatedPin) setGeneratedPin(data.generatedPin);
@@ -1004,7 +1010,7 @@ export default function RoutineGenerator() {
   }
 
   function logout(){setAuthSession(null);setLoginPassword("");setLoginEmail("");setLoginIdentifier("");setLoginPin("");setActiveTab("coach");resetWizard();}
-  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");}
+  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");setWizInjuries(new Set());setWizMonthsTrained("");}
   function copyPin(p:string){navigator.clipboard.writeText(p).then(()=>{setCopiedPin(true);setTimeout(()=>setCopiedPin(false),2500);});}
 
   const visibleTabs=[{id:"coach" as Tab,label:"Coach Studio"},{id:"clients" as Tab,label:"Asesorados"},{id:"portal" as Tab,label:"Portal"}];
@@ -1248,6 +1254,34 @@ export default function RoutineGenerator() {
                           <button key={val} onClick={()=>setWizTrainingLocation(val)} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${wizTrainingLocation===val?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>{label}</button>
                         ))}
                       </div>
+                    </div>
+
+                    <div>
+                      <span className={labelCls}>Historial de entrenamiento</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {(["Menos de 6 meses","6–12 meses","1–2 años","Más de 2 años"] as string[]).map(opt=>(
+                          <button key={opt} onClick={()=>setWizMonthsTrained(wizMonthsTrained===opt?"":opt)}
+                            className={`rounded-xl px-3.5 py-2 text-[12.5px] font-semibold transition border ${wizMonthsTrained===opt?"border-[#a87d49] bg-[#a87d49] text-white":"border-[#e0d9cc] bg-white text-[#8c8377] hover:border-[#a87d49]"}`}>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className={labelCls}>Lesiones o molestias (opcional)</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {(["Rodilla","Espalda baja","Hombro","Cadera","Tobillo","Muñeca","Cuello"] as string[]).map(zone=>{
+                          const on=wizInjuries.has(zone);
+                          return (
+                            <button key={zone} onClick={()=>setWizInjuries(prev=>{const n=new Set(prev);on?n.delete(zone):n.add(zone);return n;})}
+                              className={`rounded-xl px-3.5 py-2 text-[12.5px] font-semibold transition border ${on?"border-[#9a4b34] bg-[#9a4b34] text-white":"border-[#e0d9cc] bg-white text-[#8c8377] hover:border-[#9a4b34]"}`}>
+                              {zone}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-[#b3aa9b]">Selecciona las zonas donde hay dolor o restricción de movimiento.</p>
                     </div>
                   </div>
                 )}
@@ -1921,29 +1955,196 @@ export default function RoutineGenerator() {
                     ))}
                   </div>
 
-                  {/* Mi rutina */}
+                  {/* Mi entrenamiento — vista diaria + registro fusionados */}
                   {portalTab==="rutina" && (
-                    portalClient.program
-                      ? <ClientProgramView
-                          program={portalClient.program}
-                          routineId={portalClient.routineId??""}
-                          clientLevel={portalClient.experienceLevel}
-                          clientLocation={portalClient.trainingLocation}
-                          swapTarget={swapTarget}
-                          swapOptions={swapOptions}
-                          swapLoading={swapLoading}
-                          swapSaving={swapSaving}
-                          onOpenSwap={openSwap}
-                          onApplySwap={applySwap}
-                          onCancelSwap={()=>{setSwapTarget(null);setSwapOptions([]);}}
-                          onShowExercise={setExerciseModal}
-                          gifMap={gifMap}
-                        />
-                      : <div className="rounded-[18px] border border-[#e7e1d6] bg-[#faf8f4] p-8 text-center">
+                    !portalClient.program
+                      ? <div className="rounded-[18px] border border-[#e7e1d6] bg-[#faf8f4] p-8 text-center">
                           <div className="text-4xl mb-3">⏳</div>
                           <p className="font-display text-[17px] font-semibold text-[#17120d]">Tu rutina está en preparación</p>
                           <p className="mt-1 text-[13px] text-[#8c8377]">Tu coach está generando tu plan personalizado. Te avisará cuando esté listo.</p>
                         </div>
+                      : (()=>{
+                          const allWeeks=portalClient.program!.weeks;
+                          const currentWeekData=allWeeks.find(w=>w.weekNumber===logWeek)??allWeeks[0];
+                          const currentDayData=currentWeekData?.days.find(d=>d.dayIndex===logDay)??currentWeekData?.days[0];
+                          const allNames=currentDayData?.selections.map(s=>s.exercise.name)??[];
+                          const totalDays=currentWeekData?.days.length??0;
+                          const goToDay=(w:number,d:number)=>{setLogWeek(w);setLogDay(d);setSavedExercises(new Set());setSessionComplete(false);setExerciseLogs({});setLogNotes({});};
+
+                          if(sessionComplete){
+                            return (
+                              <div className="rounded-[18px] bg-[#17120d] p-8 text-center text-[#f4f1ea]">
+                                <div className="text-5xl mb-3">🎉</div>
+                                <h3 className="font-display text-[24px] font-semibold">¡Sesión completada!</h3>
+                                <p className="mt-2 text-[13px] text-[#b7ad9d]">Semana {logWeek} · Día {logDay+1} — {FOCUS_LABELS[currentDayData?.focus??""]??""}</p>
+                                <button onClick={()=>{setSessionComplete(false);setSavedExercises(new Set());setExerciseLogs({});setLogNotes({});}}
+                                  className="mt-5 rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white">Ver otro día</button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="flex flex-col gap-4">
+                              {/* Navegador semana */}
+                              <div className="flex items-center justify-between rounded-[18px] border border-[#e7e1d6] bg-white p-4">
+                                <button disabled={logWeek<=1} onClick={()=>goToDay(logWeek-1,0)}
+                                  className="rounded-xl border border-[#e0d9cc] px-3 py-2 text-sm font-semibold text-[#8c8377] disabled:opacity-30 hover:border-[#a87d49] hover:text-[#a87d49]">← Sem ant.</button>
+                                <div className="text-center">
+                                  <div className="font-display text-[17px] font-semibold">Semana {logWeek}{currentWeekData?.deload?" — Deload":""}</div>
+                                  <div className="text-[11px] text-[#a39a8d]">{allWeeks.length} semanas en total</div>
+                                </div>
+                                <button disabled={logWeek>=allWeeks.length} onClick={()=>goToDay(logWeek+1,0)}
+                                  className="rounded-xl border border-[#e0d9cc] px-3 py-2 text-sm font-semibold text-[#8c8377] disabled:opacity-30 hover:border-[#a87d49] hover:text-[#a87d49]">Sem sig. →</button>
+                              </div>
+
+                              {/* Selector de días */}
+                              <div className="flex gap-1.5 overflow-x-auto rounded-2xl border border-[#e7e1d6] bg-white p-1.5">
+                                {currentWeekData?.days.map(d=>(
+                                  <button key={d.dayIndex} onClick={()=>goToDay(logWeek,d.dayIndex)}
+                                    className={`flex-none rounded-xl px-3 py-2 text-center transition ${logDay===d.dayIndex?"bg-[#17120d] text-white":"text-[#8c8377] hover:bg-[#f5f0e8]"}`}>
+                                    <div className="text-[11px] font-bold">Día {d.dayIndex+1}</div>
+                                    <div className="text-[9.5px] mt-0.5 max-w-[70px] truncate">{FOCUS_LABELS[d.focus]??d.focus.replace(/_/g," ")}</div>
+                                  </button>
+                                ))}
+                              </div>
+
+                              {/* Info del día */}
+                              {currentDayData && (
+                                <div className="flex items-center justify-between rounded-[16px] bg-[#17120d] px-5 py-3.5 text-[#f4f1ea]">
+                                  <div>
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a87d49]">Sesión de hoy</div>
+                                    <div className="font-display text-[18px] font-semibold mt-0.5">{FOCUS_LABELS[currentDayData.focus]??currentDayData.focus.replace(/_/g," ")}</div>
+                                  </div>
+                                  {allNames.length>0 && (
+                                    <div className="text-right">
+                                      <div className="font-display text-[28px] font-semibold leading-none">{savedExercises.size}/{allNames.length}</div>
+                                      <div className="text-[9.5px] uppercase tracking-[0.08em] text-[#9a9186] mt-0.5">ejercicios</div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Barra progreso */}
+                              {allNames.length>0 && savedExercises.size>0 && (
+                                <div className="h-2 w-full rounded-full bg-[#ece6db]">
+                                  <div className="h-2 rounded-full bg-[#a87d49] transition-all" style={{width:`${(savedExercises.size/allNames.length)*100}%`}}/>
+                                </div>
+                              )}
+
+                              {/* Ejercicios del día */}
+                              {currentDayData?.selections.map(sel=>{
+                                const name=sel.exercise.name;
+                                const isSaved=savedExercises.has(name);
+                                const sets=exerciseLogs[name]??Array.from({length:sel.sets},(_,i)=>({setNumber:i+1,reps:sel.repsMin,weightKg:0,completed:false}));
+                                const completedSets=sets.filter(s=>s.completed).length;
+                                const updateSet=(si:number,field:keyof SetLog,val:number|boolean)=>{
+                                  setExerciseLogs(prev=>({...prev,[name]:sets.map((s,idx)=>idx===si?{...s,[field]:val}:s)}));
+                                };
+                                const markAll=()=>{const done=sets.every(s=>s.completed);setExerciseLogs(prev=>({...prev,[name]:sets.map(s=>({...s,completed:!done}))}));};
+                                return (
+                                  <article key={name} className={`rounded-[18px] border p-5 transition ${isSaved?"border-[#a87d49] bg-[#fdf9f4]":"border-[#e7e1d6] bg-white"}`}>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#a87d49]">{sel.role}</div>
+                                        <h4 className="font-display text-[16px] font-semibold leading-tight mt-0.5">{tx(name)}</h4>
+                                        <p className="text-[12px] text-[#8c8377] mt-0.5">{sel.sets} series · {sel.repsMin}–{sel.repsMax} reps · RIR {sel.rir}</p>
+                                      </div>
+                                      <div className="flex flex-none flex-col items-end gap-1.5">
+                                        {isSaved && <span className="rounded-full bg-[#a87d49] px-2.5 py-0.5 text-[10px] font-semibold text-white">✓ Guardado</span>}
+                                        <button onClick={()=>openSwap(sel,portalClient.routineId??"",(currentWeekData?.weekNumber??1),currentDayData.dayIndex)}
+                                          className="rounded-xl border border-[#e0d9cc] px-2.5 py-1 text-[11px] font-semibold text-[#8c8377] hover:border-[#a87d49] hover:text-[#a87d49]">Cambiar ↕</button>
+                                      </div>
+                                    </div>
+
+                                    {/* Sets */}
+                                    <div className="mt-4 space-y-2">
+                                      <div className="grid grid-cols-[32px_1fr_1fr_40px] gap-2 px-1 text-[10px] font-semibold uppercase tracking-[0.07em] text-[#a39a8d]">
+                                        <span>#</span><span>Reps</span><span>Peso kg</span><span>✓</span>
+                                      </div>
+                                      {sets.map((s,si)=>(
+                                        <div key={si} className={`grid grid-cols-[32px_1fr_1fr_40px] items-center gap-2 rounded-xl p-1.5 transition ${s.completed?"bg-[#f5f0e8]":"bg-[#faf8f4]"}`}>
+                                          <span className="text-center text-[12px] font-bold text-[#a87d49]">{s.setNumber}</span>
+                                          <input type="number" min={0} max={50} value={s.reps} onChange={e=>updateSet(si,"reps",Number(e.target.value))}
+                                            className="rounded-lg border border-[#e0d9cc] bg-white p-1.5 text-center text-[13px] font-semibold focus:border-[#a87d49] focus:outline-none"/>
+                                          <input type="number" min={0} max={500} step={0.5} value={s.weightKg} onChange={e=>updateSet(si,"weightKg",Number(e.target.value))}
+                                            className="rounded-lg border border-[#e0d9cc] bg-white p-1.5 text-center text-[13px] font-semibold focus:border-[#a87d49] focus:outline-none"/>
+                                          <button onClick={()=>updateSet(si,"completed",!s.completed)}
+                                            className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold transition ${s.completed?"bg-[#a87d49] text-white":"border-2 border-[#e0d9cc] text-[#c2b9aa] hover:border-[#a87d49]"}`}>
+                                            {s.completed?"✓":"○"}
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                                        <button onClick={markAll} className="rounded-lg border border-[#a87d49] px-3 py-1.5 text-[11px] font-semibold text-[#a87d49] hover:bg-[#fdf5ec]">
+                                          {sets.every(s=>s.completed)?"Desmarcar":"Marcar todo ✓"}
+                                        </button>
+                                        <button onClick={()=>setExerciseLogs(prev=>({...prev,[name]:[...sets,{setNumber:sets.length+1,reps:sel.repsMin,weightKg:sets[sets.length-1]?.weightKg??0,completed:false}]}))}
+                                          className="rounded-lg border border-dashed border-[#d8cdb8] px-3 py-1.5 text-[11px] font-semibold text-[#8c8377] hover:border-[#a87d49]">+ Serie</button>
+                                        <span className="ml-auto text-[11px] text-[#a39a8d]">{completedSets}/{sets.length} listas</span>
+                                      </div>
+                                    </div>
+
+                                    <label className="mt-3 block"><span className={labelCls}>Notas</span>
+                                      <input className={inputCls} placeholder="Peso alcanzado, sensaciones, técnica…" value={logNotes[name]??""} onChange={e=>setLogNotes(prev=>({...prev,[name]:e.target.value}))}/>
+                                    </label>
+                                    <button onClick={()=>saveExerciseLog(name,allNames)} disabled={logSaving||isSaved}
+                                      className={`mt-3 px-5 py-2 text-sm transition ${isSaved?"cursor-default rounded-xl bg-[#ece6db] text-[#a39a8d]":primaryBtn}`}>
+                                      {isSaved?"Guardado":"Guardar ejercicio"}
+                                    </button>
+                                  </article>
+                                );
+                              })}
+
+                              {/* Swap modal inline */}
+                              {swapTarget && swapTarget.dayIndex===currentDayData?.dayIndex && (
+                                <article className="rounded-[18px] border border-[#a87d49] bg-[#fffbf5] p-5">
+                                  <h4 className="font-display text-[16px] font-semibold">Cambiar: {tx(swapTarget.sel.exercise.name)}</h4>
+                                  <p className="text-[12px] text-[#8c8377] mt-0.5">Solo ejercicios del mismo patrón de movimiento</p>
+                                  {swapLoading && <p className="mt-3 text-sm text-[#a39a8d]">Buscando alternativas…</p>}
+                                  {!swapLoading && swapOptions.length===0 && <p className="mt-3 text-sm text-[#a39a8d]">Sin alternativas disponibles.</p>}
+                                  {swapOptions.map(opt=>(
+                                    <div key={opt.id} className="mt-2 flex items-center justify-between rounded-xl border border-[#e7e1d6] bg-white p-3">
+                                      <span className="text-[13px] font-semibold">{tx(opt.name)}</span>
+                                      <button onClick={()=>applySwap(opt.id)} disabled={swapSaving}
+                                        className={`ml-3 flex-none rounded-xl px-3 py-1.5 text-[12px] font-semibold ${primaryBtn}`}>Elegir</button>
+                                    </div>
+                                  ))}
+                                  <button onClick={()=>{setSwapTarget(null);setSwapOptions([]);}} className="mt-3 text-[12px] text-[#a39a8d] hover:text-[#17120d]">Cancelar</button>
+                                </article>
+                              )}
+
+                              {/* Botón guardar sesión completa */}
+                              {allNames.length>0 && !sessionComplete && (
+                                <button onClick={()=>saveFullSession(allNames)} disabled={logSaving}
+                                  className={`w-full py-4 text-[15px] font-semibold ${primaryBtn}`}>
+                                  {logSaving?"Guardando…":"Guardar sesión completa"}
+                                </button>
+                              )}
+
+                              {/* Vista completa de la rutina */}
+                              <details className="rounded-[18px] border border-[#e7e1d6] bg-white">
+                                <summary className="cursor-pointer px-5 py-4 text-[13px] font-semibold text-[#8c8377] hover:text-[#17120d]">Ver rutina completa ▾</summary>
+                                <div className="border-t border-[#e7e1d6] p-5">
+                                  <ClientProgramView
+                                    program={portalClient.program!}
+                                    routineId={portalClient.routineId??""}
+                                    clientLevel={portalClient.experienceLevel}
+                                    clientLocation={portalClient.trainingLocation}
+                                    swapTarget={swapTarget}
+                                    swapOptions={swapOptions}
+                                    swapLoading={swapLoading}
+                                    swapSaving={swapSaving}
+                                    onOpenSwap={openSwap}
+                                    onApplySwap={applySwap}
+                                    onCancelSwap={()=>{setSwapTarget(null);setSwapOptions([]);}}
+                                    onShowExercise={setExerciseModal}
+                                    gifMap={gifMap}
+                                  />
+                                </div>
+                              </details>
+                            </div>
+                          );
+                        })()
                   )}
 
                   {/* Registrar sesión */}
