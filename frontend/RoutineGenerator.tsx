@@ -124,7 +124,7 @@ const PATTERN_LABELS: Record<MovementPattern,string> = {
   vertical_push:"Empuje vertical", horizontal_pull:"Jalón horizontal", vertical_pull:"Jalón vertical", core:"Core",
 };
 const SEVERITY_LABELS: Record<LimitationSeverity,string> = { mild:"Leve", moderate:"Moderada", severe:"Severa" };
-const STEP_LABELS: Record<CoachStep,string> = { 1:"Agregar cliente", 2:"Generar rutina", 3:"Descargar rutina", 4:"Acceso cliente" };
+const STEP_LABELS: Record<CoachStep,string> = { 1:"Agregar asesorado", 2:"Generar rutina", 3:"Descargar rutina", 4:"Acceso asesorado" };
 const FOCUS_LABELS: Record<string,string> = {
   glute_hamstring:"Glúteo · Isquiotibiales", glute_quad:"Glúteo · Cuádriceps",
   glute_specialization:"Especialización glúteo", glute_heavy:"Glúteo pesado",
@@ -209,7 +209,7 @@ const ghostBtn = "rounded-xl border border-[#e0d9cc] font-semibold text-[#8c8377
 
 function initials(n:string){return n.split(" ").map(p=>p[0]).filter(Boolean).slice(0,2).join("").toUpperCase();}
 function fdt(iso:string){const d=new Date(iso);if(isNaN(d.getTime()))return"N/A";return new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(d);}
-function mapApiClient(p:ApiClientDashboard):Client{return{id:p.client.id,name:p.client.name?.trim()||p.client.email||"Cliente",goal:p.client.goal,experienceLevel:p.client.experienceLevel,daysPerWeek:p.client.daysPerWeek,gender:(p.client.gender??"unspecified") as Gender,sessionDuration:([45,60,75,90].includes(p.client.sessionDuration??0)?p.client.sessionDuration:60) as SessionDuration,trainingLocation:p.client.trainingLocation??"gym",pin:p.client.pin,routineId:p.routineId,program:p.program,progress:p.progress??[],weakPoints:p.client.weakPoints??[],limitations:p.client.limitations??[]};}
+function mapApiClient(p:ApiClientDashboard):Client{return{id:p.client.id,name:p.client.name?.trim()||p.client.email||"Asesorado",goal:p.client.goal,experienceLevel:p.client.experienceLevel,daysPerWeek:p.client.daysPerWeek,gender:(p.client.gender??"unspecified") as Gender,sessionDuration:([45,60,75,90].includes(p.client.sessionDuration??0)?p.client.sessionDuration:60) as SessionDuration,trainingLocation:p.client.trainingLocation??"gym",pin:p.client.pin,routineId:p.routineId,program:p.program,progress:p.progress??[],weakPoints:p.client.weakPoints??[],limitations:p.client.limitations??[]};}
 function adherence(c:Client){const w=c.program?.weeks??[];if(!w.length)return 0;const mx=w.length*c.daysPerWeek;const done=c.progress.reduce((s,i)=>s+i.completedSessions,0);return Math.min(100,Math.round(done/mx*100));}
 
 /* ───────────────────────────────────────────────────────────────────
@@ -837,7 +837,7 @@ export default function RoutineGenerator() {
     setError(null);
     if(useExisting){
       const c=clients.find(cc=>cc.id===selectedClientId);
-      if(!c){setError("Selecciona un cliente.");return;}
+      if(!c){setError("Selecciona un asesorado.");return;}
       setFlowClient(c);setGoal(c.goal);setLevel(c.experienceLevel);setDays(c.daysPerWeek);setCoachStep(2);return;
     }
     const name=newClientName.trim();if(!name){setError("Escribe el nombre.");return;}
@@ -1007,7 +1007,7 @@ export default function RoutineGenerator() {
   function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");}
   function copyPin(p:string){navigator.clipboard.writeText(p).then(()=>{setCopiedPin(true);setTimeout(()=>setCopiedPin(false),2500);});}
 
-  const visibleTabs=[{id:"coach" as Tab,label:"Coach Studio"},{id:"clients" as Tab,label:"Clientes"},{id:"portal" as Tab,label:"Portal"}];
+  const visibleTabs=[{id:"coach" as Tab,label:"Coach Studio"},{id:"clients" as Tab,label:"Asesorados"},{id:"portal" as Tab,label:"Portal"}];
   const navTabs=authSession?.role==="coach"?visibleTabs:visibleTabs.filter(t=>t.id==="portal");
 
   /* ===================================================================
@@ -1111,7 +1111,7 @@ export default function RoutineGenerator() {
           {!twoFactorPending && !loginLockedUntil && (
             <p className="mt-5 text-center text-[12px] text-[#a39a8d]">
               {authRole==="coach"
-                ? <><span>¿Eres cliente? </span><button onClick={()=>{setAuthRole("client");setError(null);setLoginLockedUntil(null);}} className="text-[#a87d49] hover:underline">Entra con tu PIN</button></>
+                ? <><span>¿Eres asesorado? </span><button onClick={()=>{setAuthRole("client");setError(null);setLoginLockedUntil(null);}} className="text-[#a87d49] hover:underline">Entra con tu PIN</button></>
                 : <button onClick={()=>{setAuthRole("coach");setError(null);setLoginLockedUntil(null);}} className="text-[#a87d49] hover:underline">← Volver</button>
               }
             </p>
@@ -1124,8 +1124,8 @@ export default function RoutineGenerator() {
   /* ===================================================================
      APP
      =================================================================== */
-  const pgTitle = activeTab==="coach"?"Flujo de alta":activeTab==="clients"?"Tus clientes":"Mi entrenamiento";
-  const pgSub = activeTab==="coach"?"Agrega cliente, genera rutina y dale acceso.":activeTab==="clients"?"Seguimiento de adherencia y avance.":"Tu rutina y registro de progreso.";
+  const pgTitle = activeTab==="coach"?"Flujo de alta":activeTab==="clients"?"Tus asesorados":"Mi entrenamiento";
+  const pgSub = activeTab==="coach"?"Agrega asesorado, genera rutina y dale acceso.":activeTab==="clients"?"Seguimiento de adherencia y avance.":"Tu rutina y registro de progreso.";
   const sessionInitials = authSession.role==="coach"?"BL":initials(authSession.name);
 
   return (
@@ -1191,10 +1191,10 @@ export default function RoutineGenerator() {
             {/* Paso 1 */}
             {coachStep===1 && (
               <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6 sm:p-8">
-                <h2 className="font-display text-[24px] font-semibold">① Agregar cliente</h2>
+                <h2 className="font-display text-[24px] font-semibold">① Agregar asesorado</h2>
                 <div className="mt-5 flex gap-1.5 rounded-2xl bg-[#ece6db] p-1.5">
                   <button onClick={()=>{setUseExisting(false);setError(null);setDuplicateWarning(null);}} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${!useExisting?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>Nueva persona</button>
-                  <button onClick={()=>{setUseExisting(true);setError(null);setDuplicateWarning(null);}} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${useExisting?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>Cliente existente</button>
+                  <button onClick={()=>{setUseExisting(true);setError(null);setDuplicateWarning(null);}} className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${useExisting?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>Asesorado existente</button>
                 </div>
                 {!useExisting && (
                   <div className="mt-5 flex flex-col gap-3.5">
@@ -1266,7 +1266,7 @@ export default function RoutineGenerator() {
                 {/* Advertencia de duplicado */}
                 {duplicateWarning && !useExisting && (
                   <div className="mt-4 rounded-xl border border-[#d4a84b] bg-[#fdf8f0] p-4">
-                    <p className="text-[13px] font-semibold text-[#8f6a3c]">Ya existe un cliente con ese nombre</p>
+                    <p className="text-[13px] font-semibold text-[#8f6a3c]">Ya existe un asesorado con ese nombre</p>
                     <p className="mt-1 text-[12px] text-[#a87d49]">
                       <strong>{duplicateWarning.name}</strong> · {GOAL_LABELS[duplicateWarning.goal]} · {LEVEL_LABELS[duplicateWarning.experienceLevel]}
                     </p>
@@ -1274,7 +1274,7 @@ export default function RoutineGenerator() {
                       <button
                         onClick={()=>{setFlowClient(duplicateWarning);setGoal(duplicateWarning.goal);setLevel(duplicateWarning.experienceLevel);setDays(duplicateWarning.daysPerWeek);setDuplicateWarning(null);setCoachStep(2);}}
                         className={`flex-1 py-2 text-[13px] ${primaryBtn}`}
-                      >Usar cliente existente</button>
+                      >Usar asesorado existente</button>
                       <button
                         onClick={()=>{setNewClientName("");setDuplicateWarning(null);}}
                         className={`flex-1 py-2 text-[13px] ${ghostBtn}`}
@@ -1536,7 +1536,7 @@ export default function RoutineGenerator() {
                 <ProgramView program={flowProgram} onShowExercise={setExerciseModal} gifMap={gifMap}/>
                 <div className="flex gap-3">
                   <button onClick={()=>setCoachStep(2)} className={`px-5 py-3.5 text-sm ${ghostBtn}`}>← Regenerar</button>
-                  <button onClick={()=>setCoachStep(4)} className={`flex-1 py-3.5 text-[15px] ${primaryBtn}`}>Continuar → Acceso cliente</button>
+                  <button onClick={()=>setCoachStep(4)} className={`flex-1 py-3.5 text-[15px] ${primaryBtn}`}>Continuar → Acceso asesorado</button>
                 </div>
               </div>
             )}
@@ -1548,7 +1548,7 @@ export default function RoutineGenerator() {
                 <div className="flex items-center gap-4">
                   <div className="flex h-14 w-14 flex-none items-center justify-center rounded-2xl bg-[#17120d] text-xl font-bold text-white">{initials(flowClient.name)}</div>
                   <div>
-                    <h2 className="font-display text-[24px] font-semibold">④ Acceso cliente listo</h2>
+                    <h2 className="font-display text-[24px] font-semibold">④ Acceso asesorado listo</h2>
                     <p className="mt-0.5 text-[13px] text-[#8c8377]">{flowClient.name} ya tiene perfil y rutina. Comparte el PIN con ella.</p>
                   </div>
                 </div>
@@ -1622,7 +1622,7 @@ export default function RoutineGenerator() {
                 <div className="mt-5 rounded-2xl bg-[#faf3e8] border border-[#ede0c4] p-5">
                   <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#8f6a3c]">Instrucciones para {flowClient.name}</p>
                   <ol className="mt-3 space-y-2 text-[13px] text-[#7a6a52]">
-                    <li>1. Abre la app LB Method y toca <strong>«Cliente»</strong>.</li>
+                    <li>1. Abre la app LB Method y toca <strong>«Asesorado»</strong>.</li>
                     <li>2. Ingresa tu correo, nombre o ID: <strong className="font-mono text-[#8f6a3c]">{flowClient.name}</strong></li>
                     <li>3. Ingresa tu PIN: <strong className="font-mono text-[#8f6a3c]">{generatedPin||clientPin||flowClient.pin||"(ver arriba)"}</strong></li>
                     <li>4. ¡Listo! Verás tu rutina, podrás registrar tus pesos y chatear con tu coach.</li>
@@ -1880,7 +1880,7 @@ export default function RoutineGenerator() {
                 )}
               </div>
             )}
-            {!selectedClient && <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-8 text-center text-sm text-[#a39a8d]">Selecciona un cliente.</div>}
+            {!selectedClient && <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-8 text-center text-sm text-[#a39a8d]">Selecciona un asesorado.</div>}
           </section>
         )}
 
@@ -1898,7 +1898,7 @@ export default function RoutineGenerator() {
 
             {(() => {
               const portalClient=clients.find(c=>c.id===portalClientId)??null;
-              if(!portalClient)return <p className="text-sm text-[#a39a8d]">Selecciona un cliente.</p>;
+              if(!portalClient)return <p className="text-sm text-[#a39a8d]">Selecciona un asesorado.</p>;
               return (
                 <>
                   {/* Header portal */}
