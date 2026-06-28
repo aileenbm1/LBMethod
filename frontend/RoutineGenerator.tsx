@@ -495,6 +495,8 @@ export default function RoutineGenerator() {
   const [logNotes, setLogNotes] = useState<Record<string, string>>({});
   const [, setDayLogsLoaded] = useState(false);
   const [logSaving, setLogSaving] = useState(false);
+  const [savedExercises, setSavedExercises] = useState<Set<string>>(new Set());
+  const [sessionComplete, setSessionComplete] = useState(false);
 
   /* --- Modal de imagen de ejercicio --- */
   const [exerciseModal, setExerciseModal] = useState<{name:string;imageUrl?:string;videoUrl?:string}|null>(null);
@@ -772,6 +774,7 @@ export default function RoutineGenerator() {
 
   useEffect(()=>{
     if(portalTab!=="registrar"||!portalClientId)return;
+    setSavedExercises(new Set());setSessionComplete(false);
     const client=clients.find(c=>c.id===portalClientId);
     if(!client?.program)return;
     // Init sets from routine prescription
@@ -788,14 +791,34 @@ export default function RoutineGenerator() {
     loadDayLogs(portalClientId,logWeek,logDay);
   },[portalTab,logWeek,logDay,portalClientId]);
 
-  async function saveExerciseLog(exerciseName:string){
+  async function saveExerciseLog(exerciseName:string, allNames?: string[]){
     if(!portalClientId)return;
     const sets=exerciseLogs[exerciseName];
     if(!sets||sets.length===0)return;
     setLogSaving(true);
     try{
       await apiFetch(`/usuario/${portalClientId}/logs`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({weekNumber:logWeek,dayIndex:logDay,exerciseName,setsData:sets,notes:logNotes[exerciseName]||""})});
+      setSavedExercises(prev=>{
+        const next=new Set(prev);next.add(exerciseName);
+        if(allNames && next.size>=allNames.length) setSessionComplete(true);
+        return next;
+      });
     }catch(e){setError(e instanceof Error?e.message:"Error al guardar")}
+    finally{setLogSaving(false);}
+  }
+
+  async function saveFullSession(names: string[]){
+    if(!portalClientId||names.length===0)return;
+    setLogSaving(true);setError(null);
+    try{
+      for(const name of names){
+        const sets=exerciseLogs[name];
+        if(!sets||sets.length===0)continue;
+        await apiFetch(`/usuario/${portalClientId}/logs`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({weekNumber:logWeek,dayIndex:logDay,exerciseName:name,setsData:sets,notes:logNotes[name]||""})});
+        setSavedExercises(prev=>{const next=new Set(prev);next.add(name);return next;});
+      }
+      setSessionComplete(true);
+    }catch(e){setError(e instanceof Error?e.message:"Error al guardar sesión")}
     finally{setLogSaving(false);}
   }
 
@@ -1916,83 +1939,148 @@ export default function RoutineGenerator() {
                           onShowExercise={setExerciseModal}
                           gifMap={gifMap}
                         />
-                      : <p className="rounded-xl bg-[#faf6ef] p-4 text-sm text-[#7a6a52]">Aún no tienes rutina asignada. Tu coach la generará pronto.</p>
+                      : <div className="rounded-[18px] border border-[#e7e1d6] bg-[#faf8f4] p-8 text-center">
+                          <div className="text-4xl mb-3">⏳</div>
+                          <p className="font-display text-[17px] font-semibold text-[#17120d]">Tu rutina está en preparación</p>
+                          <p className="mt-1 text-[13px] text-[#8c8377]">Tu coach está generando tu plan personalizado. Te avisará cuando esté listo.</p>
+                        </div>
                   )}
 
                   {/* Registrar sesión */}
                   {portalTab==="registrar" && (
                     <div className="flex flex-col gap-4">
                       {!portalClient.program
-                        ? <p className="rounded-xl bg-[#faf6ef] p-4 text-sm text-[#7a6a52]">Sin rutina asignada todavía.</p>
+                        ? <div className="rounded-[18px] border border-[#e7e1d6] bg-[#faf8f4] p-8 text-center">
+                            <div className="text-4xl mb-3">🏋️</div>
+                            <p className="font-display text-[17px] font-semibold text-[#17120d]">Tu rutina está en camino</p>
+                            <p className="mt-1 text-[13px] text-[#8c8377]">Tu coach la generará pronto. Vuelve aquí para registrar tus sesiones.</p>
+                          </div>
                         : (()=>{
-                          const currentWeekData=portalClient.program!.weeks.find(w=>w.weekNumber===logWeek);
+                          const allWeeks=portalClient.program!.weeks;
+                          const currentWeekData=allWeeks.find(w=>w.weekNumber===logWeek);
                           const currentDayData=currentWeekData?.days.find(d=>d.dayIndex===logDay);
+                          const allNames=currentDayData?.selections.map(s=>s.exercise.name)??[];
+                          const savedCount=savedExercises.size;
+                          const totalCount=allNames.length;
+
+                          if(sessionComplete){
+                            return (
+                              <div className="rounded-[18px] bg-[#17120d] p-8 text-center text-[#f4f1ea]">
+                                <div className="text-5xl mb-3">🎉</div>
+                                <h3 className="font-display text-[24px] font-semibold">¡Sesión completada!</h3>
+                                <p className="mt-2 text-[13px] text-[#b7ad9d]">Semana {logWeek} · Día {logDay+1} — {FOCUS_LABELS[currentDayData?.focus??""]??""}</p>
+                                <p className="mt-1 text-[13px] text-[#9a9186]">{totalCount} ejercicios registrados</p>
+                                <button onClick={()=>{setSessionComplete(false);setSavedExercises(new Set());setExerciseLogs({});setLogNotes({});}}
+                                  className="mt-5 rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white hover:bg-[#8f6538]">
+                                  Registrar otra sesión
+                                </button>
+                              </div>
+                            );
+                          }
+
                           return (
                             <>
+                              {/* Selector de sesión */}
                               <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
-                                <h3 className="font-display text-[18px] font-semibold">Selecciona sesión</h3>
+                                <h3 className="font-display text-[18px] font-semibold">¿Qué sesión entrenaste hoy?</h3>
                                 <div className="mt-4 grid grid-cols-2 gap-3">
                                   <label className="block"><span className={labelCls}>Semana</span>
-                                    <select className={inputCls} value={logWeek} onChange={e=>{setLogWeek(Number(e.target.value));setExerciseLogs({});setLogNotes({});}}>
-                                      {portalClient.program!.weeks.map(w=><option key={w.weekNumber} value={w.weekNumber}>Semana {w.weekNumber}{w.deload?" (Deload)":""}</option>)}
+                                    <select className={inputCls} value={logWeek} onChange={e=>{setLogWeek(Number(e.target.value));setExerciseLogs({});setLogNotes({});setSavedExercises(new Set());setSessionComplete(false);}}>
+                                      {allWeeks.map(w=><option key={w.weekNumber} value={w.weekNumber}>Semana {w.weekNumber}{w.deload?" — Deload":""}</option>)}
                                     </select>
                                   </label>
                                   <label className="block"><span className={labelCls}>Día</span>
-                                    <select className={inputCls} value={logDay} onChange={e=>{setLogDay(Number(e.target.value));setExerciseLogs({});setLogNotes({});}}>
-                                      {currentWeekData?.days.map(d=><option key={d.dayIndex} value={d.dayIndex}>Día {d.dayIndex+1} — {d.focus.replace(/_/g," ")}</option>)}
+                                    <select className={inputCls} value={logDay} onChange={e=>{setLogDay(Number(e.target.value));setExerciseLogs({});setLogNotes({});setSavedExercises(new Set());setSessionComplete(false);}}>
+                                      {currentWeekData?.days.map(d=><option key={d.dayIndex} value={d.dayIndex}>Día {d.dayIndex+1} — {FOCUS_LABELS[d.focus]??d.focus.replace(/_/g," ")}</option>)}
                                     </select>
                                   </label>
                                 </div>
+                                {/* Barra de progreso de sesión */}
+                                {totalCount>0 && (
+                                  <div className="mt-4">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a39a8d]">Progreso de sesión</span>
+                                      <span className="text-[12px] font-semibold text-[#a87d49]">{savedCount}/{totalCount} ejercicios</span>
+                                    </div>
+                                    <div className="h-2 w-full rounded-full bg-[#ece6db]">
+                                      <div className="h-2 rounded-full bg-[#a87d49] transition-all" style={{width:`${(savedCount/totalCount)*100}%`}}/>
+                                    </div>
+                                  </div>
+                                )}
                               </article>
 
                               {currentDayData?.selections.map(sel=>{
                                 const name=sel.exercise.name;
+                                const isSaved=savedExercises.has(name);
                                 const sets=exerciseLogs[name]??Array.from({length:sel.sets},(_,i)=>({setNumber:i+1,reps:sel.repsMin,weightKg:0,completed:false}));
+                                const completedSets=sets.filter(s=>s.completed).length;
                                 const updateSet=(si:number,field:keyof SetLog,val:number|boolean)=>{
                                   const updated=sets.map((s,idx)=>idx===si?{...s,[field]:val}:s);
                                   setExerciseLogs(prev=>({...prev,[name]:updated}));
                                 };
+                                const markAllSets=()=>{
+                                  const allDone=sets.every(s=>s.completed);
+                                  setExerciseLogs(prev=>({...prev,[name]:sets.map(s=>({...s,completed:!allDone}))}));
+                                };
                                 return (
-                                  <article key={name} className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
-                                    <div className="flex items-center justify-between gap-3">
+                                  <article key={name} className={`rounded-[18px] border p-5 transition ${isSaved?"border-[#a87d49] bg-[#fdf9f4]":"border-[#e7e1d6] bg-white"}`}>
+                                    <div className="flex items-start justify-between gap-3">
                                       <div>
                                         <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#a87d49]">{sel.role}</div>
                                         <h4 className="font-display text-[17px] font-semibold">{tx(name)}</h4>
-                                        <p className="text-[12px] text-[#8c8377]">Prescrito: {sel.sets}×{sel.repsMin}-{sel.repsMax} · RIR {sel.rir}</p>
+                                        <p className="text-[12px] text-[#8c8377]">{sel.sets} series · {sel.repsMin}–{sel.repsMax} reps · RIR {sel.rir}</p>
                                       </div>
+                                      {isSaved && <span className="flex-none rounded-full bg-[#a87d49] px-2.5 py-1 text-[11px] font-semibold text-white">Guardado ✓</span>}
                                     </div>
 
                                     <div className="mt-4 space-y-2">
-                                      {/* Header */}
-                                      <div className="grid grid-cols-[40px_1fr_1fr_40px] gap-2 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#a39a8d]">
-                                        <span>Set</span><span>Reps</span><span>Peso (kg)</span><span>✓</span>
+                                      <div className="grid grid-cols-[36px_1fr_1fr_44px] gap-2 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#a39a8d]">
+                                        <span>#</span><span>Reps</span><span>Peso kg</span><span>Listo</span>
                                       </div>
                                       {sets.map((s,si)=>(
-                                        <div key={si} className={`grid grid-cols-[40px_1fr_1fr_40px] items-center gap-2 rounded-xl p-2 transition ${s.completed?"bg-[#f0faf0]":"bg-[#faf8f4]"}`}>
+                                        <div key={si} className={`grid grid-cols-[36px_1fr_1fr_44px] items-center gap-2 rounded-xl p-2 transition ${s.completed?"bg-[#f5f0e8]":"bg-[#faf8f4]"}`}>
                                           <span className="text-center text-[13px] font-bold text-[#a87d49]">{s.setNumber}</span>
                                           <input type="number" min={0} max={50} value={s.reps} onChange={e=>updateSet(si,"reps",Number(e.target.value))}
                                             className="rounded-lg border border-[#e0d9cc] bg-white p-2 text-center text-[14px] font-semibold focus:border-[#a87d49] focus:outline-none"/>
                                           <input type="number" min={0} max={500} step={0.5} value={s.weightKg} onChange={e=>updateSet(si,"weightKg",Number(e.target.value))}
                                             className="rounded-lg border border-[#e0d9cc] bg-white p-2 text-center text-[14px] font-semibold focus:border-[#a87d49] focus:outline-none"/>
-                                          <button onClick={()=>updateSet(si,"completed",!s.completed)} className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold transition ${s.completed?"bg-[#a87d49] text-white":"border-2 border-[#e0d9cc] text-[#c2b9aa]"}`}>{s.completed?"✓":"○"}</button>
+                                          <button onClick={()=>updateSet(si,"completed",!s.completed)}
+                                            className={`flex h-9 w-9 items-center justify-center rounded-lg text-base font-bold transition ${s.completed?"bg-[#a87d49] text-white shadow-sm":"border-2 border-[#e0d9cc] text-[#c2b9aa] hover:border-[#a87d49]"}`}>
+                                            {s.completed?"✓":"○"}
+                                          </button>
                                         </div>
                                       ))}
-                                      {/* Add/Remove set */}
-                                      <div className="flex gap-2 pt-1">
+                                      <div className="flex flex-wrap gap-2 pt-1">
+                                        <button onClick={markAllSets}
+                                          className="rounded-lg border border-[#a87d49] px-3 py-1.5 text-[12px] font-semibold text-[#a87d49] hover:bg-[#fdf5ec]">
+                                          {sets.every(s=>s.completed)?"Desmarcar todo":"Marcar todo ✓"}
+                                        </button>
                                         <button onClick={()=>setExerciseLogs(prev=>({...prev,[name]:[...sets,{setNumber:sets.length+1,reps:sel.repsMin,weightKg:sets[sets.length-1]?.weightKg??0,completed:false}]}))}
                                           className="rounded-lg border border-dashed border-[#d8cdb8] px-3 py-1.5 text-[12px] font-semibold text-[#8c8377] hover:border-[#a87d49] hover:text-[#a87d49]">+ Serie</button>
                                         {sets.length>1&&<button onClick={()=>setExerciseLogs(prev=>({...prev,[name]:sets.slice(0,-1)}))}
                                           className="rounded-lg border border-dashed border-[#d8cdb8] px-3 py-1.5 text-[12px] font-semibold text-[#8c8377] hover:border-[#9a4b34] hover:text-[#9a4b34]">− Serie</button>}
+                                        <span className="ml-auto text-[11px] text-[#a39a8d] self-center">{completedSets}/{sets.length} completadas</span>
                                       </div>
                                     </div>
 
-                                    <label className="mt-3 block"><span className={labelCls}>Notas del ejercicio</span>
-                                      <input className={inputCls} placeholder="Sensaciones, técnica…" value={logNotes[name]??""} onChange={e=>setLogNotes(prev=>({...prev,[name]:e.target.value}))}/>
+                                    <label className="mt-3 block"><span className={labelCls}>Notas</span>
+                                      <input className={inputCls} placeholder="Sensaciones, técnica, peso alcanzado…" value={logNotes[name]??""} onChange={e=>setLogNotes(prev=>({...prev,[name]:e.target.value}))}/>
                                     </label>
-                                    <button onClick={()=>saveExerciseLog(name)} disabled={logSaving} className={`mt-3 px-5 py-2.5 text-sm ${primaryBtn}`}>{logSaving?"Guardando…":"Guardar este ejercicio"}</button>
+                                    <button onClick={()=>saveExerciseLog(name, allNames)} disabled={logSaving||isSaved}
+                                      className={`mt-3 px-5 py-2.5 text-sm transition ${isSaved?"cursor-default rounded-xl bg-[#ece6db] text-[#a39a8d]":primaryBtn}`}>
+                                      {isSaved?"Guardado":"Guardar ejercicio"}
+                                    </button>
                                   </article>
                                 );
                               })}
+
+                              {/* Botón guardar sesión completa */}
+                              {allNames.length>0 && !sessionComplete && (
+                                <button onClick={()=>saveFullSession(allNames)} disabled={logSaving}
+                                  className={`w-full py-4 text-[15px] font-semibold ${primaryBtn}`}>
+                                  {logSaving?"Guardando sesión…":"Guardar sesión completa"}
+                                </button>
+                              )}
                             </>
                           );
                         })()
