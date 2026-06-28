@@ -4,6 +4,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 import type { Exercise } from "../types";
+import { EXERCISE_LIBRARY } from "../data/exerciseLibrary";
 import type { ExerciseRepository } from "./ExerciseRepository";
 
 export class PrismaExerciseRepository implements ExerciseRepository {
@@ -11,7 +12,23 @@ export class PrismaExerciseRepository implements ExerciseRepository {
 
   async all(): Promise<Exercise[]> {
     const rows = await this.prisma.exercise.findMany();
+    if (rows.length === 0) {
+      await this.seedLibrary();
+      return EXERCISE_LIBRARY;
+    }
     return rows.map(toDomain);
+  }
+
+  private async seedLibrary(): Promise<void> {
+    console.log(`Auto-seeding ${EXERCISE_LIBRARY.length} exercises into database...`);
+    for (const e of EXERCISE_LIBRARY) {
+      await this.prisma.exercise.upsert({
+        where: { id: e.id },
+        update: { name: e.name, muscleGroup: e.muscleGroup, movementPattern: e.movementPattern as any, category: e.category as any, equipment: e.equipment as any, difficulty: e.difficulty as any, activationScore: e.activationScore, fatigueScore: e.fatigueScore, stabilityRequirement: e.stabilityRequirement, unilateral: e.unilateral, primaryMuscle: e.primaryMuscle, secondaryMuscles: e.secondaryMuscles, imageUrl: e.imageUrl, videoUrl: e.videoUrl },
+        create: { id: e.id, name: e.name, muscleGroup: e.muscleGroup, movementPattern: e.movementPattern as any, category: e.category as any, equipment: e.equipment as any, difficulty: e.difficulty as any, activationScore: e.activationScore, fatigueScore: e.fatigueScore, stabilityRequirement: e.stabilityRequirement, unilateral: e.unilateral, primaryMuscle: e.primaryMuscle, secondaryMuscles: e.secondaryMuscles, imageUrl: e.imageUrl, videoUrl: e.videoUrl },
+      });
+    }
+    console.log("Exercise seed complete.");
   }
 
   async byId(id: string): Promise<Exercise | null> {
