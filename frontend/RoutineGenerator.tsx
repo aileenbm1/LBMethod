@@ -1978,7 +1978,7 @@ export default function RoutineGenerator() {
                           const currentWeekData=allWeeks.find(w=>w.weekNumber===logWeek)??allWeeks[0];
                           const currentDayData=currentWeekData?.days.find(d=>d.dayIndex===logDay)??currentWeekData?.days[0];
                           const allNames=currentDayData?.selections.map(s=>s.exercise.name)??[];
-                          const totalDays=currentWeekData?.days.length??0;
+
                           const goToDay=(w:number,d:number)=>{setLogWeek(w);setLogDay(d);setSavedExercises(new Set());setSessionComplete(false);setExerciseLogs({});setLogNotes({});};
 
                           if(sessionComplete){
@@ -2061,7 +2061,7 @@ export default function RoutineGenerator() {
                                       </div>
                                       <div className="flex flex-none flex-col items-end gap-1.5">
                                         {isSaved && <span className="rounded-full bg-[#a87d49] px-2.5 py-0.5 text-[10px] font-semibold text-white">✓ Guardado</span>}
-                                        <button onClick={()=>openSwap(sel,portalClient.routineId??"",(currentWeekData?.weekNumber??1),currentDayData.dayIndex)}
+                                        <button onClick={()=>openSwap(currentWeekData?.weekNumber??1,currentDayData.dayIndex,sel,portalClient.routineId??"",portalClient.experienceLevel,portalClient.trainingLocation)}
                                           className="rounded-xl border border-[#e0d9cc] px-2.5 py-1 text-[11px] font-semibold text-[#8c8377] hover:border-[#a87d49] hover:text-[#a87d49]">Cambiar ↕</button>
                                       </div>
                                     </div>
