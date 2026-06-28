@@ -393,31 +393,40 @@ function downloadPdf(client:Client, program:Program) {
         // Nota del método de entrenamiento
         if (hasMethod && sel.methodConfig) {
           const methodTag = `${sel.methodConfig.labelEs}: `;
-          const fullNote = sel.methodConfig.prescriptionNote;
+          // Limpiar caracteres Unicode que jsPDF no soporta (→ ≥ ≤ etc.)
+          const fullNote = sel.methodConfig.prescriptionNote
+            .replace(/→/g, "->").replace(/←/g, "<-")
+            .replace(/[""]/g, '"').replace(/['']/g, "'")
+            .replace(/[^\x00-\xFF]/g, "?");
           const noteX = ML + 27;
-          const noteMaxW = CW - 30;
+          const noteMaxW = CW - 32;
 
-          doc.setFont("helvetica","bold");
           doc.setFontSize(7);
+          doc.setFont("helvetica","bold");
           const tagW = doc.getTextWidth(methodTag);
 
           doc.setFont("helvetica","normal");
-          const noteLines: string[] = doc.splitTextToSize(fullNote, noteMaxW - tagW);
+          // Dividir solo la nota (sin el tag) en el ancho disponible
+          const availableW = noteMaxW - tagW;
+          const noteLines: string[] = doc.splitTextToSize(fullNote, availableW > 20 ? availableW : noteMaxW);
           const visibleLines = noteLines.slice(0, 2);
-          const blockH = visibleLines.length * 4.5 + 2;
+          const blockH = visibleLines.length * 4.8 + 3;
 
           doc.setFillColor(254, 243, 226);
-          doc.rect(ML + 26, y - 1.5, CW - 27, blockH, "F");
+          doc.rect(ML + 26, y - 1, CW - 27, blockH, "F");
 
           doc.setTextColor(...R.gold);
           doc.setFont("helvetica","bold");
           doc.setFontSize(7);
-          doc.text(methodTag, noteX, y + 2.5);
+          doc.text(methodTag, noteX, y + 3);
 
-          doc.setTextColor(122, 106, 82);
+          doc.setTextColor(100, 85, 60);
           doc.setFont("helvetica","normal");
-          doc.text(visibleLines[0] ?? "", noteX + tagW, y + 2.5);
-          if (visibleLines[1]) doc.text(visibleLines[1], noteX, y + 6.5);
+          doc.setFontSize(6.8);
+          // Primera línea: después del tag
+          doc.text(visibleLines[0] ?? "", noteX + tagW, y + 3);
+          // Segunda línea: sangría izquierda con el tag
+          if (visibleLines[1]) doc.text(visibleLines[1], noteX + tagW, y + 7.2);
 
           y += blockH;
         }
