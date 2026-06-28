@@ -157,12 +157,12 @@ export class ExerciseSelector {
   private weakMuscleForDay(focus: string, weakPoints: WeakPoint[]): string | undefined {
     if (weakPoints.length === 0) return undefined;
     const MAP: Record<string, string[]> = {
-      glute_hamstring:    ["hamstrings", "glutes", "glute_medius"],
-      glute_quad:         ["quadriceps", "glutes"],
-      glute_specialization: ["glutes", "glute_medius"],
-      glute_heavy:        ["glutes", "hamstrings"],
-      glute_metabolic:    ["glutes", "glute_medius"],
-      full_leg:           ["quadriceps", "hamstrings", "glutes"],
+      glute_hamstring:    ["hamstrings", "glutes", "glute_medius", "glute_minimus"],
+      glute_quad:         ["quadriceps", "glutes", "glute_medius", "glute_minimus"],
+      glute_specialization: ["glutes", "glute_medius", "glute_minimus"],
+      glute_heavy:        ["glutes", "hamstrings", "glute_medius", "glute_minimus"],
+      glute_metabolic:    ["glutes", "glute_medius", "glute_minimus"],
+      full_leg:           ["quadriceps", "hamstrings", "glutes", "calves"],
     };
     const relevant = MAP[focus] ?? [];
     const sorted = [...weakPoints].sort((a, b) => b.priority - a.priority);
@@ -178,8 +178,8 @@ export class ExerciseSelector {
       shoulder_triceps:["shoulders", "triceps"],
       upper_body:      ["chest", "back", "shoulders"],
       back_shoulder:   ["back", "shoulders"],
-      full_leg:        ["quadriceps", "hamstrings"],
-      legs_push:       ["quadriceps", "hamstrings"],
+      full_leg:        ["quadriceps", "hamstrings", "calves"],
+      legs_push:       ["quadriceps", "hamstrings", "calves"],
     };
     const relevant = MAP[focus] ?? [];
     const sorted = [...weakPoints].sort((a, b) => b.priority - a.priority);

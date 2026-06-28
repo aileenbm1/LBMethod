@@ -107,6 +107,9 @@ export const EXERCISE_LIBRARY: Exercise[] = [
   // ---- Calves --------------------------------------------------------------
   ex("standing-calf-raise", "Elevación de Talones de Pie", "calves", "knee_dominant", "isolation", "machine", "beginner", 7.5, 1, 1, false, "calves", [],
     "https://storage.googleapis.com/lbmethod-assets/exercises/calf-raise.gif"),
+  ex("seated-calf-raise", "Elevación de Talones Sentada", "calves", "knee_dominant", "isolation", "machine", "beginner", 7.8, 1, 1, false, "calves", []),
+  ex("bodyweight-calf-raise", "Elevación de Talones con Peso Corporal", "calves", "knee_dominant", "isolation", "bodyweight", "beginner", 6.8, 1, 1, false, "calves", []),
+  ex("single-leg-calf-raise", "Elevación de Talones en Una Pierna", "calves", "knee_dominant", "accessory", "bodyweight", "intermediate", 7.4, 1, 2, true, "calves", []),
 
   // ---- Upper body: back (home) ---------------------------------------------
   ex("pull-up", "Dominadas", "back", "vertical_pull", "compound", "bodyweight", "advanced", 8.8, 4, 4, false, "back", ["biceps"],

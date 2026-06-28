@@ -90,17 +90,19 @@ const GOAL_LABELS: Record<Goal, string> = {
 const LEVEL_LABELS: Record<Level,string> = { beginner:"Principiante", intermediate:"Intermedio", advanced:"Avanzado" };
 const GENDER_LABELS: Record<Gender,string> = { female:"Mujer", male:"Hombre", unspecified:"No especificar" };
 const GOALS_BY_GENDER: Record<Gender, Goal[]> = {
-  female: ["glute_hypertrophy","glute_growth","lower_body_focus","fat_loss","body_recomposition","muscle_gain"],
+  female: ["glute_hypertrophy","lower_body_focus","fat_loss","body_recomposition","muscle_gain"],
   male:   ["muscle_gain","fat_loss","body_recomposition","lower_body_focus"],
-  unspecified: ["glute_hypertrophy","glute_growth","lower_body_focus","fat_loss","body_recomposition","muscle_gain"],
+  unspecified: ["glute_hypertrophy","lower_body_focus","fat_loss","body_recomposition","muscle_gain"],
 };
-type FocusMuscleKey = "glutes"|"glute_medius"|"hamstrings"|"quadriceps"|"core"|"chest"|"back"|"shoulders"|"biceps"|"triceps"|"upper_body";
+type FocusMuscleKey = "glutes"|"glute_medius"|"glute_minimus"|"hamstrings"|"quadriceps"|"calves"|"core"|"chest"|"back"|"shoulders"|"biceps"|"triceps"|"upper_body";
 interface FocusOption { key: FocusMuscleKey; label: string; desc: string; suggestGoal: Goal; }
 const ALL_FOCUS_OPTIONS: FocusOption[] = [
-  {key:"glutes",      label:"Glúteo Mayor",    desc:"Masa y forma del glúteo mayor. Hip thrust, bisagra y alta frecuencia.",             suggestGoal:"glute_hypertrophy"},
-  {key:"glute_medius",label:"Glúteo Medio",    desc:"Anchura y estabilidad de cadera. Abducción y ejercicios unilaterales.",             suggestGoal:"glute_hypertrophy"},
-  {key:"hamstrings",  label:"Isquiotibiales",  desc:"Fuerza y definición posterior de pierna. Peso muerto y curl femoral.",              suggestGoal:"lower_body_focus"},
-  {key:"quadriceps",  label:"Cuádriceps",      desc:"Volumen frontal de pierna. Sentadillas, prensa y hack squat.",                      suggestGoal:"lower_body_focus"},
+  {key:"glutes",        label:"Glúteo Mayor",    desc:"Masa y forma del glúteo mayor. Hip thrust, bisagra y alta frecuencia.",               suggestGoal:"glute_hypertrophy"},
+  {key:"glute_medius",  label:"Glúteo Medio",    desc:"Anchura y estabilidad de cadera. Abducción y ejercicios unilaterales.",               suggestGoal:"glute_hypertrophy"},
+  {key:"glute_minimus", label:"Glúteo Mínimo",   desc:"Estabilidad pélvica y abducción profunda. Complementa glúteo medio y mayor.",         suggestGoal:"glute_hypertrophy"},
+  {key:"hamstrings",    label:"Isquiotibiales",  desc:"Fuerza y definición posterior de pierna. Peso muerto y curl femoral.",                suggestGoal:"lower_body_focus"},
+  {key:"quadriceps",    label:"Cuádriceps",      desc:"Volumen frontal de pierna. Sentadillas, prensa y hack squat.",                        suggestGoal:"lower_body_focus"},
+  {key:"calves",        label:"Pantorrillas",    desc:"Desarrollo de gemelos y sóleo. Elevaciones de talón en todas sus variantes.",         suggestGoal:"lower_body_focus"},
   {key:"chest",       label:"Pecho",           desc:"Hipertrofia pectoral. Press de pecho, inclinado y aperturas.",                      suggestGoal:"muscle_gain"},
   {key:"back",        label:"Espalda",         desc:"Anchura y grosor dorsal. Jalones, remos y pull-ups.",                               suggestGoal:"muscle_gain"},
   {key:"shoulders",   label:"Hombros",         desc:"Tamaño y definición del deltoides. Press de hombros y elevaciones.",                suggestGoal:"muscle_gain"},
@@ -328,7 +330,9 @@ function downloadPdf(client:Client, program:Program) {
     doc.setFontSize(7.5);
     doc.setFont("helvetica","normal");
     doc.text(
-      `Series glúteo: ${week.volume.weeklyGluteSets}   ·   Frecuencia glúteo: ${week.volume.gluteFrequency}×/sem   ·   Tren inferior: ${Math.round(week.volume.lowerVolumePct*100)}%`,
+      (client.goal==="glute_hypertrophy"||client.goal==="glute_growth")
+        ? `Series glúteo: ${week.volume.weeklyGluteSets}   ·   Frecuencia glúteo: ${week.volume.gluteFrequency}×/sem   ·   Tren inferior: ${Math.round(week.volume.lowerVolumePct*100)}%`
+        : `Series totales: ${week.days.reduce((s,d)=>s+d.totalSets,0)}   ·   Tren inferior: ${Math.round(week.volume.lowerVolumePct*100)}%   ·   Tren superior: ${Math.round(week.volume.upperVolumePct*100)}%`,
       ML, y
     );
     y += 6;
@@ -2446,7 +2450,7 @@ function ClientProgramView({program,routineId,clientLevel,clientLocation,swapTar
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8c8377]">{allSame?`RIR progresivo sem 1–${program.weeks.length}`:week.deload?"Semana de descarga":`RIR objetivo ${week.rir}`}</span>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2.5">
-            {[{v:week.volume.weeklyGluteSets,l:"series"},{v:`${Math.round(week.volume.lowerVolumePct*100)}%`,l:"tren inferior"},{v:`${week.volume.gluteFrequency}×`,l:"frec. glúteo"}].map(({v,l})=>(
+            {volumeStats(program.goal, week).map(({v,l})=>(
               <div key={l} className="rounded-[11px] border border-[#eee7da] bg-[#faf8f4] p-3 text-center">
                 <div className="font-display text-2xl font-semibold leading-none">{v}</div>
                 <div className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[#9a9186]">{l}</div>
@@ -2542,6 +2546,21 @@ function weekEq(a:Week,b:Week):boolean{
   });
 }
 
+function volumeStats(goal: Goal, week: Week): {v:string|number; l:string}[] {
+  const isGlute = goal==="glute_hypertrophy"||goal==="glute_growth";
+  if(isGlute) return [
+    {v:week.volume.weeklyGluteSets, l:"series glúteo"},
+    {v:`${Math.round(week.volume.lowerVolumePct*100)}%`, l:"tren inferior"},
+    {v:`${week.volume.gluteFrequency}×`, l:"frec. glúteo"},
+  ];
+  const totalSets=week.days.reduce((s,d)=>s+d.totalSets,0);
+  return [
+    {v:totalSets, l:"series totales"},
+    {v:`${Math.round(week.volume.lowerVolumePct*100)}%`, l:"tren inferior"},
+    {v:`${Math.round(week.volume.upperVolumePct*100)}%`, l:"tren superior"},
+  ];
+}
+
 function ProgramView({program,onShowExercise,gifMap}:{program:Program;onShowExercise?:(ex:{name:string;imageUrl?:string;videoUrl?:string})=>void;gifMap?:Record<string,string|null>}){
   const allSame=program.weeks.length>1&&program.weeks.slice(1).every(w=>weekEq(w,program.weeks[0]));
   const weeksToShow=allSame?[program.weeks[0]]:program.weeks;
@@ -2566,7 +2585,7 @@ function ProgramView({program,onShowExercise,gifMap}:{program:Program;onShowExer
             </span>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2.5">
-            {[{v:week.volume.weeklyGluteSets,l:"series glúteo"},{v:`${Math.round(week.volume.lowerVolumePct*100)}%`,l:"tren inferior"},{v:`${week.volume.gluteFrequency}×`,l:"frec. glúteo"}].map(({v,l})=>(
+            {volumeStats(program.goal, week).map(({v,l})=>(
               <div key={l} className="rounded-[11px] border border-[#eee7da] bg-[#faf8f4] p-3 text-center">
                 <div className="font-display text-2xl font-semibold leading-none">{v}</div>
                 <div className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[#9a9186]">{l}</div>

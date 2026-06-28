@@ -63,17 +63,19 @@ const MALE_SPLITS: Record<number, DayFocus[]> = {
 // ── Enfoque muscular: día preferido por músculo ───────────────────────────────
 
 const MUSCLE_TO_DAY_FOCUS: Record<string, DayFocus | null> = {
-  chest:        "chest_triceps",
-  triceps:      "chest_triceps",
-  back:         "back_biceps",
-  biceps:       "back_biceps",
-  shoulders:    "shoulder_triceps",
-  quadriceps:   "legs_push",
-  hamstrings:   "glute_hamstring",
-  glutes:       null,   // ya cubierto por objetivo
-  glute_medius: null,
-  upper_body:   null,   // balanced, sin día extra
-  core:         null,
+  chest:          "chest_triceps",
+  triceps:        "chest_triceps",
+  back:           "back_biceps",
+  biceps:         "back_biceps",
+  shoulders:      "shoulder_triceps",
+  quadriceps:     "legs_push",
+  hamstrings:     "glute_hamstring",
+  calves:         "legs_push",
+  glutes:         null,   // ya cubierto por objetivo
+  glute_medius:   null,
+  glute_minimus:  null,
+  upper_body:     null,   // balanced, sin día extra
+  core:           null,
 };
 
 const REPLACEABLE_DAYS: DayFocus[] = [
