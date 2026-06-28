@@ -361,7 +361,7 @@ function downloadPdf(client:Client, program:Program) {
         checkPage(14);
 
         const hasMethod = sel.methodConfig?.isIntensityTechnique;
-        const rowH = hasMethod ? 13 : 8;
+        const rowH = hasMethod ? 16 : 8;
 
         // Fondo alternado suave
         doc.setFillColor(252, 250, 247);
@@ -393,27 +393,33 @@ function downloadPdf(client:Client, program:Program) {
         // Nota del método de entrenamiento
         if (hasMethod && sel.methodConfig) {
           const methodTag = `${sel.methodConfig.labelEs}: `;
-          const methodNote = sel.methodConfig.prescriptionNote.slice(0, 90);
+          const fullNote = sel.methodConfig.prescriptionNote;
+          const noteX = ML + 27;
+          const noteMaxW = CW - 30;
 
-          doc.setFillColor(254, 243, 226); // warm amber light
-          doc.rect(ML + 26, y - 1.5, CW - 27, 5.5, "F");
+          doc.setFont("helvetica","bold");
+          doc.setFontSize(7);
+          const tagW = doc.getTextWidth(methodTag);
+
+          doc.setFont("helvetica","normal");
+          const noteLines: string[] = doc.splitTextToSize(fullNote, noteMaxW - tagW);
+          const visibleLines = noteLines.slice(0, 2);
+          const blockH = visibleLines.length * 4.5 + 2;
+
+          doc.setFillColor(254, 243, 226);
+          doc.rect(ML + 26, y - 1.5, CW - 27, blockH, "F");
 
           doc.setTextColor(...R.gold);
           doc.setFont("helvetica","bold");
           doc.setFontSize(7);
-          doc.text(methodTag, ML + 27, y + 2.5);
+          doc.text(methodTag, noteX, y + 2.5);
 
-          const tagW = doc.getTextWidth(methodTag);
           doc.setTextColor(122, 106, 82);
           doc.setFont("helvetica","normal");
-          doc.setFontSize(7);
-          // Truncar si no cabe
-          const maxW = CW - 27 - tagW - 3;
-          let note = methodNote;
-          while (doc.getTextWidth(note) > maxW && note.length > 10) note = note.slice(0, -4) + "…";
-          doc.text(note, ML + 27 + tagW, y + 2.5);
+          doc.text(visibleLines[0] ?? "", noteX + tagW, y + 2.5);
+          if (visibleLines[1]) doc.text(visibleLines[1], noteX, y + 6.5);
 
-          y += 5;
+          y += blockH;
         }
 
         y += 1.5;
