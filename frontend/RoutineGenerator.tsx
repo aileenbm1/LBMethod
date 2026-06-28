@@ -76,8 +76,8 @@ interface Day { dayIndex: number; focus: string; sessionFatigue: number; totalSe
 interface Week { weekNumber: number; rir: number; deload: boolean; volume: { weeklyGluteSets: number; lowerVolumePct: number; upperVolumePct: number; gluteFrequency: number; }; days: Day[]; }
 interface Program { goal: Goal; level: Level; daysPerWeek: number; weeks: Week[]; }
 interface WeeklyProgress { weekNumber: number; completedSessions: number; notes: string; updatedAt: string; }
-interface Client { id: string; name: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender: Gender; sessionDuration: SessionDuration; trainingLocation: TrainingLocation; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }
-interface ApiClientDashboard { client: { id: string; name?: string; email?: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender?: Gender; sessionDuration?: number; trainingLocation?: TrainingLocation; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; }
+interface Client { id: string; name: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender: Gender; sessionDuration: SessionDuration; trainingLocation: TrainingLocation; bodyweightKg?: number; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }
+interface ApiClientDashboard { client: { id: string; name?: string; email?: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender?: Gender; sessionDuration?: number; trainingLocation?: TrainingLocation; bodyweightKg?: number; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; }
 
 /* ===================================================================
    CONSTANTS
@@ -211,7 +211,7 @@ const ghostBtn = "rounded-xl border border-[#e0d9cc] font-semibold text-[#8c8377
 
 function initials(n:string){return n.split(" ").map(p=>p[0]).filter(Boolean).slice(0,2).join("").toUpperCase();}
 function fdt(iso:string){const d=new Date(iso);if(isNaN(d.getTime()))return"N/A";return new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(d);}
-function mapApiClient(p:ApiClientDashboard):Client{return{id:p.client.id,name:p.client.name?.trim()||p.client.email||"Asesorado",goal:p.client.goal,experienceLevel:p.client.experienceLevel,daysPerWeek:p.client.daysPerWeek,gender:(p.client.gender??"unspecified") as Gender,sessionDuration:([45,60,75,90].includes(p.client.sessionDuration??0)?p.client.sessionDuration:60) as SessionDuration,trainingLocation:p.client.trainingLocation??"gym",pin:p.client.pin,routineId:p.routineId,program:p.program,progress:p.progress??[],weakPoints:p.client.weakPoints??[],limitations:p.client.limitations??[]};}
+function mapApiClient(p:ApiClientDashboard):Client{return{id:p.client.id,name:p.client.name?.trim()||p.client.email||"Asesorado",goal:p.client.goal,experienceLevel:p.client.experienceLevel,daysPerWeek:p.client.daysPerWeek,gender:(p.client.gender??"unspecified") as Gender,sessionDuration:([45,60,75,90].includes(p.client.sessionDuration??0)?p.client.sessionDuration:60) as SessionDuration,trainingLocation:p.client.trainingLocation??"gym",bodyweightKg:p.client.bodyweightKg,pin:p.client.pin,routineId:p.routineId,program:p.program,progress:p.progress??[],weakPoints:p.client.weakPoints??[],limitations:p.client.limitations??[]};}
 function adherence(c:Client){const w=c.program?.weeks??[];if(!w.length)return 0;const mx=w.length*c.daysPerWeek;const done=c.progress.reduce((s,i)=>s+i.completedSessions,0);return Math.min(100,Math.round(done/mx*100));}
 
 /* ───────────────────────────────────────────────────────────────────
@@ -230,6 +230,29 @@ const R = { // colores RGB reutilizables
 const ROLE_ES: Record<string,string> = {
   main:"Principal", unilateral:"Unilateral", isolation:"Aislamiento", accessory:"Accesorio"
 };
+
+/** Sugiere un rango de carga inicial basado en peso corporal, nivel y rol del ejercicio. */
+function suggestedLoad(equipment: string, category: string, level: Level, bwKg: number): string | null {
+  if(!bwKg || bwKg <= 0) return null;
+  // Solo para ejercicios con carga externa
+  if(!["barbell","dumbbell","machine","smith","cable","kettlebell"].includes(equipment)) return null;
+  type Pct = [number, number]; // [min%, max%] del peso corporal
+  const PCT: Record<string, Record<Level, Pct>> = {
+    barbell:    { beginner:[0.3,0.5], intermediate:[0.5,0.8], advanced:[0.7,1.2] },
+    smith:      { beginner:[0.3,0.5], intermediate:[0.5,0.8], advanced:[0.7,1.2] },
+    dumbbell:   { beginner:[0.1,0.2], intermediate:[0.15,0.3], advanced:[0.25,0.45] },
+    machine:    { beginner:[0.4,0.6], intermediate:[0.6,0.9], advanced:[0.8,1.3] },
+    cable:      { beginner:[0.1,0.2], intermediate:[0.15,0.3], advanced:[0.2,0.4] },
+    kettlebell: { beginner:[0.15,0.25], intermediate:[0.2,0.35], advanced:[0.3,0.5] },
+  };
+  if(category === "isolation") return null; // aislamiento: sin sugerencia
+  const pct = PCT[equipment]?.[level];
+  if(!pct) return null;
+  const lo = Math.round(bwKg * pct[0] / 2.5) * 2.5;
+  const hi = Math.round(bwKg * pct[1] / 2.5) * 2.5;
+  if(lo <= 0 || hi <= 0) return null;
+  return `~${lo}–${hi} kg`;
+}
 
 function downloadPdf(client:Client, program:Program) {
   const allSame=program.weeks.length>1&&program.weeks.slice(1).every(w=>weekEq(w,program.weeks[0]));
@@ -382,8 +405,11 @@ function downloadPdf(client:Client, program:Program) {
         doc.setFontSize(8.5);
         doc.text(tx(sel.exercise.name), ML + 26, y + 3.5);
 
-        // Prescripción
-        const presc = `${sel.sets}×${sel.repsMin}–${sel.repsMax}  RIR ${sel.rir}`;
+        // Prescripción + carga sugerida
+        const loadHint = client.bodyweightKg
+          ? suggestedLoad((sel as any).exercise.equipment??"", (sel as any).exercise.category??"", client.experienceLevel, client.bodyweightKg)
+          : null;
+        const presc = `${sel.sets}×${sel.repsMin}–${sel.repsMax}  RIR ${sel.rir}${loadHint ? `  ·  ${loadHint}` : ""}`;
         doc.setTextColor(...R.mid);
         doc.setFontSize(8);
         doc.text(presc, ML + CW - 3, y + 3.5, {align:"right"});
@@ -486,6 +512,7 @@ export default function RoutineGenerator() {
   const [wizPatterns, setWizPatterns] = useState<MovementPattern[]>([]);
   const [wizInjuries, setWizInjuries] = useState<Set<string>>(new Set());
   const [wizMonthsTrained, setWizMonthsTrained] = useState<string>("");
+  const [wizWeight, setWizWeight] = useState<string>("");
   const [wizSeverity, setWizSeverity] = useState<LimitationSeverity>("mild");
   const [wizLimitDesc, setWizLimitDesc] = useState("");
 
@@ -873,7 +900,8 @@ export default function RoutineGenerator() {
       const historyNotes=wizMonthsTrained?`Historial: ${wizMonthsTrained}.`:"";
       const notes=[injuryNotes,historyNotes].filter(Boolean).join(" ")||undefined;
       const injuryLimitations=[...wizInjuries].map(zone=>({description:`Molestia en ${zone}`,affectedPatterns:["knee_dominant","hip_hinge","hip_thrust","unilateral","horizontal_push","vertical_push","horizontal_pull","vertical_pull"].slice(0,2),severity:"mild" as const}));
-      const res=await apiFetch("/usuario",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,goal,experienceLevel,daysPerWeek,gender:wizGender,sessionDuration:wizSessionDuration,trainingLocation:wizTrainingLocation,notes,limitations:injuryLimitations.length>0?injuryLimitations:undefined})});
+      const bodyweightKg=wizWeight&&!isNaN(Number(wizWeight))&&Number(wizWeight)>0?Number(wizWeight):undefined;
+      const res=await apiFetch("/usuario",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,goal,experienceLevel,daysPerWeek,gender:wizGender,sessionDuration:wizSessionDuration,trainingLocation:wizTrainingLocation,bodyweightKg,notes,limitations:injuryLimitations.length>0?injuryLimitations:undefined})});
       if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d?.message??`Error ${res.status}`);}
       const data=await res.json() as {usuario:{id:string};generatedPin?:string};
       if(data.generatedPin) setGeneratedPin(data.generatedPin);
@@ -1029,7 +1057,7 @@ export default function RoutineGenerator() {
   }
 
   function logout(){setAuthSession(null);setLoginPassword("");setLoginEmail("");setLoginIdentifier("");setLoginPin("");setActiveTab("coach");resetWizard();}
-  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");setWizInjuries(new Set());setWizMonthsTrained("");}
+  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");setWizInjuries(new Set());setWizMonthsTrained("");setWizWeight("");}
   function copyPin(p:string){navigator.clipboard.writeText(p).then(()=>{setCopiedPin(true);setTimeout(()=>setCopiedPin(false),2500);});}
 
   const visibleTabs=[{id:"coach" as Tab,label:"Coach Studio"},{id:"clients" as Tab,label:"Asesorados"},{id:"portal" as Tab,label:"Portal"}];
@@ -1274,6 +1302,18 @@ export default function RoutineGenerator() {
                         ))}
                       </div>
                     </div>
+
+                    <label className="block">
+                      <span className={labelCls}>Peso corporal (kg) <span className="font-normal text-[#b3aa9b]">— opcional</span></span>
+                      <div className="relative mt-1">
+                        <input className={inputCls} type="number" min={30} max={300} step={0.5}
+                          placeholder="Ej. 65"
+                          value={wizWeight}
+                          onChange={e=>setWizWeight(e.target.value)}/>
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#b3aa9b]">kg</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-[#b3aa9b]">Se usa para sugerir cargas iniciales en la rutina. No se comparte con nadie.</p>
+                    </label>
 
                     <div>
                       <span className={labelCls}>Historial de entrenamiento</span>
