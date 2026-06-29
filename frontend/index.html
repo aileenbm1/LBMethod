@@ -2,11 +2,36 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LB Method — Routine Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>LB Method — Coaching Studio</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#a87d49" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LB Method" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/jpg" href="/src/assets/lbmethod-logo.jpg" />
+    <link rel="apple-touch-icon" href="/src/assets/lbmethod-logo.jpg" />
+
+    <!-- SEO / Preview -->
+    <meta name="description" content="Plataforma de coaching de entrenamiento personalizado con programación inteligente." />
+    <meta property="og:title" content="LB Method Coaching Studio" />
+    <meta property="og:description" content="Entrenamiento personalizado con ciencia y método." />
+    <meta property="og:type" content="website" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

@@ -640,6 +640,10 @@ export default function RoutineGenerator() {
   const [dashboardData, setDashboardData] = useState<{id:string;name:string;goal:string;lastSession:string|null;inactive:boolean}[]>([]);
   const [, setDashboardLoading] = useState(false);
 
+  /* --- Timer de descanso --- */
+  const [restTimer, setRestTimer] = useState<{secs:number;total:number;label:string}|null>(null);
+  const restTimerRef = useRef<ReturnType<typeof setInterval>|null>(null);
+
   /* --- Fotos de progreso --- */
   const [progressPhotos, setProgressPhotos] = useState<{id:string;url:string;notes?:string;takenAt:string}[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -1029,6 +1033,25 @@ export default function RoutineGenerator() {
       setSessionFeedbacks(prev=>({...prev,[`${weekNumber}-${dayIndex}`]:feeling}));
     }catch{}
     finally{setFeedbackSaving(false);}
+  }
+
+  function startRestTimer(role:string, exerciseName:string){
+    if(restTimerRef.current) clearInterval(restTimerRef.current);
+    const REST: Record<string,number> = { main:120, unilateral:90, isolation:60, accessory:60 };
+    const secs = REST[role] ?? 90;
+    setRestTimer({secs, total:secs, label:exerciseName});
+    restTimerRef.current = setInterval(()=>{
+      setRestTimer(prev=>{
+        if(!prev) return null;
+        if(prev.secs<=1){
+          clearInterval(restTimerRef.current!);
+          // Vibrar cuando termina (móvil)
+          if(navigator.vibrate) navigator.vibrate([200,100,200]);
+          return null;
+        }
+        return {...prev, secs:prev.secs-1};
+      });
+    }, 1000);
   }
 
   async function loadProgressPhotos(clientId:string){
@@ -2433,8 +2456,10 @@ export default function RoutineGenerator() {
                                 const maxKg=Math.max(...sets.map(s=>s.weightKg),0);
                                 const updateSet=(si:number,field:keyof SetLog,val:number|boolean)=>{
                                   setExerciseLogs(prev=>({...prev,[name]:sets.map((s,idx)=>idx===si?{...s,[field]:val}:s)}));
+                                  // Iniciar timer de descanso al marcar set como completado
+                                  if(field==="completed"&&val===true) startRestTimer(sel.role,tx(name));
                                 };
-                                const markAll=()=>{const done=sets.every(s=>s.completed);setExerciseLogs(prev=>({...prev,[name]:sets.map(s=>({...s,completed:!done}))}));};
+                                const markAll=()=>{const done=sets.every(s=>s.completed);setExerciseLogs(prev=>({...prev,[name]:sets.map(s=>({...s,completed:!done}))}));if(!done)startRestTimer(sel.role,tx(name));};
 
                                 /* ---- Tarjeta colapsada (ya guardado) ---- */
                                 if(isSaved) return (
@@ -2946,6 +2971,33 @@ export default function RoutineGenerator() {
       )}
 
       {/* ── Chat flotante global ── */}
+      {/* ── Timer de descanso flotante ── */}
+      {restTimer && (
+        <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2">
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-[#17120d] px-6 py-4 shadow-2xl text-[#f4f1ea]">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a87d49]">Descansa</div>
+            {/* Círculo de progreso */}
+            <div className="relative flex h-20 w-20 items-center justify-center">
+              <svg className="absolute inset-0 -rotate-90" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="34" fill="none" stroke="#2a231a" strokeWidth="6"/>
+                <circle cx="40" cy="40" r="34" fill="none" stroke="#a87d49" strokeWidth="6"
+                  strokeDasharray={`${2*Math.PI*34}`}
+                  strokeDashoffset={`${2*Math.PI*34*(1-restTimer.secs/restTimer.total)}`}
+                  strokeLinecap="round" style={{transition:"stroke-dashoffset 1s linear"}}/>
+              </svg>
+              <span className="font-display text-[28px] font-bold leading-none">
+                {Math.floor(restTimer.secs/60)}:{String(restTimer.secs%60).padStart(2,"0")}
+              </span>
+            </div>
+            <div className="text-[11px] text-[#9a9186] max-w-[160px] text-center truncate">{restTimer.label}</div>
+            <button onClick={()=>{clearInterval(restTimerRef.current!);setRestTimer(null);}}
+              className="mt-1 rounded-xl border border-white/20 px-4 py-1.5 text-[11px] font-semibold text-white/60 hover:text-white">
+              Saltar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* WhatsApp flotante — solo para asesorados */}
       {authSession?.role==="client" && (
         <a href={`https://wa.me/${COACH_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
