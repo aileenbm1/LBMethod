@@ -2124,59 +2124,74 @@ export default function RoutineGenerator() {
                                 const isSaved=savedExercises.has(name);
                                 const sets=exerciseLogs[name]??Array.from({length:sel.sets},(_,i)=>({setNumber:i+1,reps:sel.repsMin,weightKg:0,completed:false}));
                                 const completedSets=sets.filter(s=>s.completed).length;
+                                const maxKg=Math.max(...sets.map(s=>s.weightKg),0);
                                 const updateSet=(si:number,field:keyof SetLog,val:number|boolean)=>{
                                   setExerciseLogs(prev=>({...prev,[name]:sets.map((s,idx)=>idx===si?{...s,[field]:val}:s)}));
                                 };
                                 const markAll=()=>{const done=sets.every(s=>s.completed);setExerciseLogs(prev=>({...prev,[name]:sets.map(s=>({...s,completed:!done}))}));};
+
+                                /* ---- Tarjeta colapsada (ya guardado) ---- */
+                                if(isSaved) return (
+                                  <article key={name} className="rounded-[16px] border border-[#a87d49] bg-[#fdf9f4] px-4 py-3 flex items-center gap-3">
+                                    <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#a87d49] text-white text-sm font-bold">✓</div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#a87d49]">{sel.role}</div>
+                                      <div className="text-[14px] font-semibold truncate leading-tight">{tx(name)}</div>
+                                      <div className="text-[11px] text-[#8c8377] mt-0.5">
+                                        {sets.length} series{maxKg>0?` · ${maxKg} kg máx`:""}
+                                        {completedSets>0?` · ${completedSets}/${sets.length} completadas`:""}
+                                      </div>
+                                    </div>
+                                    <button onClick={()=>setSavedExercises(prev=>{const n=new Set(prev);n.delete(name);return n;})}
+                                      className="flex-none text-[11px] text-[#a39a8d] hover:text-[#a87d49] px-2 py-1">editar</button>
+                                  </article>
+                                );
+
+                                /* ---- Tarjeta expandida (pendiente) ---- */
                                 return (
-                                  <article key={name} className={`rounded-[18px] border p-5 transition ${isSaved?"border-[#a87d49] bg-[#fdf9f4]":"border-[#e7e1d6] bg-white"}`}>
+                                  <article key={name} className="rounded-[18px] border border-[#e7e1d6] bg-white p-4 sm:p-5">
                                     <div className="flex items-start justify-between gap-3">
                                       <div className="min-w-0">
                                         <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#a87d49]">{sel.role}</div>
-                                        <h4 className="font-display text-[16px] font-semibold leading-tight mt-0.5">{tx(name)}</h4>
-                                        <p className="text-[12px] text-[#8c8377] mt-0.5">{sel.sets} series · {sel.repsMin}–{sel.repsMax} reps · RIR {sel.rir}</p>
+                                        <h4 className="font-display text-[15px] font-semibold leading-tight mt-0.5">{tx(name)}</h4>
+                                        <p className="text-[11px] text-[#8c8377] mt-0.5">{sel.sets} series · {sel.repsMin}–{sel.repsMax} reps · RIR {sel.rir}</p>
                                       </div>
-                                      <div className="flex flex-none flex-col items-end gap-1.5">
-                                        {isSaved && <span className="rounded-full bg-[#a87d49] px-2.5 py-0.5 text-[10px] font-semibold text-white">✓ Guardado</span>}
-                                        <button onClick={()=>openSwap(currentWeekData?.weekNumber??1,currentDayData.dayIndex,sel,portalClient.routineId??"",portalClient.experienceLevel,portalClient.trainingLocation)}
-                                          className="rounded-xl border border-[#e0d9cc] px-2.5 py-1 text-[11px] font-semibold text-[#8c8377] hover:border-[#a87d49] hover:text-[#a87d49]">Cambiar ↕</button>
-                                      </div>
+                                      <button onClick={()=>openSwap(currentWeekData?.weekNumber??1,currentDayData.dayIndex,sel,portalClient.routineId??"",portalClient.experienceLevel,portalClient.trainingLocation)}
+                                        className="flex-none rounded-xl border border-[#e0d9cc] px-2.5 py-1 text-[11px] font-semibold text-[#8c8377] hover:border-[#a87d49] hover:text-[#a87d49]">Cambiar ↕</button>
                                     </div>
 
-                                    {/* Sets */}
-                                    <div className="mt-4 space-y-2">
-                                      <div className="grid grid-cols-[32px_1fr_1fr_40px] gap-2 px-1 text-[10px] font-semibold uppercase tracking-[0.07em] text-[#a39a8d]">
-                                        <span>#</span><span>Reps</span><span>Peso kg</span><span>✓</span>
+                                    {/* Sets — optimizado para móvil */}
+                                    <div className="mt-3 space-y-1.5">
+                                      <div className="grid grid-cols-[28px_1fr_1fr_36px] gap-1.5 px-1 text-[9px] font-semibold uppercase tracking-[0.07em] text-[#a39a8d]">
+                                        <span>#</span><span>Reps</span><span>kg</span><span>✓</span>
                                       </div>
                                       {sets.map((s,si)=>(
-                                        <div key={si} className={`grid grid-cols-[32px_1fr_1fr_40px] items-center gap-2 rounded-xl p-1.5 transition ${s.completed?"bg-[#f5f0e8]":"bg-[#faf8f4]"}`}>
-                                          <span className="text-center text-[12px] font-bold text-[#a87d49]">{s.setNumber}</span>
-                                          <input type="number" min={0} max={50} value={s.reps} onChange={e=>updateSet(si,"reps",Number(e.target.value))}
-                                            className="rounded-lg border border-[#e0d9cc] bg-white p-1.5 text-center text-[13px] font-semibold focus:border-[#a87d49] focus:outline-none"/>
-                                          <input type="number" min={0} max={500} step={0.5} value={s.weightKg} onChange={e=>updateSet(si,"weightKg",Number(e.target.value))}
-                                            className="rounded-lg border border-[#e0d9cc] bg-white p-1.5 text-center text-[13px] font-semibold focus:border-[#a87d49] focus:outline-none"/>
+                                        <div key={si} className={`grid grid-cols-[28px_1fr_1fr_36px] items-center gap-1.5 rounded-xl px-1 py-1 transition ${s.completed?"bg-[#f5f0e8]":"bg-[#faf8f4]"}`}>
+                                          <span className="text-center text-[11px] font-bold text-[#a87d49]">{s.setNumber}</span>
+                                          <input type="number" inputMode="numeric" min={0} max={50} value={s.reps} onChange={e=>updateSet(si,"reps",Number(e.target.value))}
+                                            className="rounded-lg border border-[#e0d9cc] bg-white p-2 text-center text-[14px] font-semibold focus:border-[#a87d49] focus:outline-none w-full"/>
+                                          <input type="number" inputMode="decimal" min={0} max={500} step={0.5} value={s.weightKg} onChange={e=>updateSet(si,"weightKg",Number(e.target.value))}
+                                            className="rounded-lg border border-[#e0d9cc] bg-white p-2 text-center text-[14px] font-semibold focus:border-[#a87d49] focus:outline-none w-full"/>
                                           <button onClick={()=>updateSet(si,"completed",!s.completed)}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold transition ${s.completed?"bg-[#a87d49] text-white":"border-2 border-[#e0d9cc] text-[#c2b9aa] hover:border-[#a87d49]"}`}>
+                                            className={`flex h-9 w-9 items-center justify-center rounded-lg text-base font-bold transition ${s.completed?"bg-[#a87d49] text-white":"border-2 border-[#e0d9cc] text-[#c2b9aa]"}`}>
                                             {s.completed?"✓":"○"}
                                           </button>
                                         </div>
                                       ))}
                                       <div className="flex flex-wrap items-center gap-2 pt-1">
-                                        <button onClick={markAll} className="rounded-lg border border-[#a87d49] px-3 py-1.5 text-[11px] font-semibold text-[#a87d49] hover:bg-[#fdf5ec]">
+                                        <button onClick={markAll} className="rounded-lg border border-[#a87d49] px-3 py-1.5 text-[11px] font-semibold text-[#a87d49]">
                                           {sets.every(s=>s.completed)?"Desmarcar":"Marcar todo ✓"}
                                         </button>
                                         <button onClick={()=>setExerciseLogs(prev=>({...prev,[name]:[...sets,{setNumber:sets.length+1,reps:sel.repsMin,weightKg:sets[sets.length-1]?.weightKg??0,completed:false}]}))}
-                                          className="rounded-lg border border-dashed border-[#d8cdb8] px-3 py-1.5 text-[11px] font-semibold text-[#8c8377] hover:border-[#a87d49]">+ Serie</button>
-                                        <span className="ml-auto text-[11px] text-[#a39a8d]">{completedSets}/{sets.length} listas</span>
+                                          className="rounded-lg border border-dashed border-[#d8cdb8] px-3 py-1.5 text-[11px] font-semibold text-[#8c8377]">+ Serie</button>
+                                        <span className="ml-auto text-[11px] text-[#a39a8d]">{completedSets}/{sets.length}</span>
                                       </div>
                                     </div>
 
-                                    <label className="mt-3 block"><span className={labelCls}>Notas</span>
-                                      <input className={inputCls} placeholder="Peso alcanzado, sensaciones, técnica…" value={logNotes[name]??""} onChange={e=>setLogNotes(prev=>({...prev,[name]:e.target.value}))}/>
-                                    </label>
-                                    <button onClick={()=>saveExerciseLog(name,allNames)} disabled={logSaving||isSaved}
-                                      className={`mt-3 px-5 py-2 text-sm transition ${isSaved?"cursor-default rounded-xl bg-[#ece6db] text-[#a39a8d]":primaryBtn}`}>
-                                      {isSaved?"Guardado":"Guardar ejercicio"}
+                                    <input className={`mt-3 ${inputCls}`} placeholder="Notas: peso alcanzado, sensaciones…" value={logNotes[name]??""} onChange={e=>setLogNotes(prev=>({...prev,[name]:e.target.value}))}/>
+                                    <button onClick={()=>saveExerciseLog(name,allNames)} disabled={logSaving}
+                                      className={`mt-3 w-full py-3 text-sm font-semibold ${primaryBtn}`}>
+                                      {logSaving?"Guardando…":"Guardar ejercicio"}
                                     </button>
                                   </article>
                                 );
