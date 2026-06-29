@@ -380,7 +380,7 @@ function downloadPdf(client:Client, program:Program) {
 
   y = 54;
 
-  // ── Info del cliente ──
+  // ── Info del asesorado ──
   doc.setFillColor(...R.sand);
   doc.roundedRect(ML, y, CW, 26, 3, 3, "F");
   doc.setDrawColor(...R.light);
@@ -624,7 +624,7 @@ export default function RoutineGenerator() {
   /* --- GIFs de ejercicios cargados dinámicamente --- */
   const [gifMap, setGifMap] = useState<Record<string,string|null>>({});
 
-  /* --- Swap de ejercicio (portal cliente) --- */
+  /* --- Swap de ejercicio (portal asesorado) --- */
   const [swapTarget, setSwapTarget] = useState<{weekNumber:number;dayIndex:number;sel:Selection;routineId:string}|null>(null);
   const [swapOptions, setSwapOptions] = useState<LibraryExercise[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
@@ -712,6 +712,11 @@ export default function RoutineGenerator() {
     if(!authSession){setClients([]);return[];}
     if(authSession.role==="client"&&authSession.clientId){
       const res=await apiFetch(`/usuario/${authSession.clientId}`);
+      if(res.status===404||res.status===401){
+        setAuthSession(null);
+        setError("Tu cuenta ya no está registrada. Pide a tu coach que te agregue de nuevo.");
+        return[];
+      }
       if(!res.ok)throw new Error(`Error ${res.status}`);
       const d=await res.json() as {usuario:ApiClientDashboard};
       const c=mapApiClient(d.usuario);setClients([c]);return[c];
@@ -732,7 +737,7 @@ export default function RoutineGenerator() {
     }
   },[selectedClientId]);
 
-  // Precargar GIFs cuando hay un programa disponible (portal cliente o step 3)
+  // Precargar GIFs cuando hay un programa disponible (portal asesorado o step 3)
   useEffect(()=>{
     const program=flowProgram??clients.find(c=>c.id===selectedClientId)?.program??null;
     if(!program)return;
@@ -768,7 +773,7 @@ export default function RoutineGenerator() {
       loadTemplates();
     }
   },[authSession]);
-  // Pre-llenar personalización cuando se selecciona cliente en Step 2
+  // Pre-llenar personalización cuando se selecciona asesorado en Step 2
   useEffect(()=>{
     if(coachStep===2&&flowClient){
       setWizGoal(flowClient.goal);
@@ -1394,7 +1399,7 @@ export default function RoutineGenerator() {
     setSwapSaving(true);
     setError(null);
     try{
-      // Buscar el programa del cliente — puede estar en clients[] o en el portal
+      // Buscar el programa del asesorado — puede estar en clients[] o en el portal
       const portalC=clients.find(c=>c.routineId===swapTarget.routineId)
                   ??clients.find(c=>c.id===portalClientId);
       const weeks=portalC?.program?.weeks??[];
@@ -1501,7 +1506,7 @@ export default function RoutineGenerator() {
             </div>
           )}
 
-          {/* Formulario cliente (PIN) */}
+          {/* Formulario asesorado (PIN) */}
           {!twoFactorPending && !loginLockedUntil && authRole==="client" && (
             <div className="mt-5 space-y-4">
               <label className="block">
