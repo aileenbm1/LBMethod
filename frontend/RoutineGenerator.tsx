@@ -475,7 +475,9 @@ function downloadPdf(client:Client, program:Program) {
    =================================================================== */
 export default function RoutineGenerator() {
   /* --- Auth --- */
-  const [authRole, setAuthRole] = useState<AuthRole>("coach");
+  const [authRole, setAuthRole] = useState<AuthRole>(
+    ()=>window.location.pathname.startsWith("/asesorado")?"client":"coach"
+  );
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginIdentifier, setLoginIdentifier] = useState("");
