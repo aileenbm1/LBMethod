@@ -255,6 +255,62 @@ function suggestedLoad(equipment: string, category: string, level: Level, bwKg: 
   return `~${lo}–${hi} kg`;
 }
 
+/* Gráfica SVG de línea — progresión de carga por ejercicio */
+function LineChart({data,yUnit="kg"}:{data:{label:string;value:number}[];yUnit?:string}){
+  if(data.length===0)return null;
+  const W=280,H=110,PL=36,PR=8,PT=12,PB=28;
+  const maxV=Math.max(...data.map(d=>d.value),1);
+  const xs=(i:number)=>data.length===1?(W-PL-PR)/2+PL:PL+i*(W-PL-PR)/(data.length-1);
+  const ys=(v:number)=>PT+(1-v/maxV)*(H-PT-PB);
+  const pathD=data.map((d,i)=>`${i===0?"M":"L"}${xs(i).toFixed(1)} ${ys(d.value).toFixed(1)}`).join(" ");
+  const mid=Math.round(maxV/2);
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+      {/* Grid */}
+      {[0,mid,maxV].map((v,i)=><line key={i} x1={PL} y1={ys(v)} x2={W-PR} y2={ys(v)} stroke="#ece6db" strokeWidth={0.8}/>)}
+      {/* Y labels */}
+      {[0,mid,maxV].map((v,i)=><text key={i} x={PL-4} y={ys(v)+4} textAnchor="end" fontSize={8} fill="#9a9186">{v}{yUnit}</text>)}
+      {/* Line */}
+      {data.length>1&&<path d={pathD} fill="none" stroke="#a87d49" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"/>}
+      {/* Área bajo la curva */}
+      {data.length>1&&<path d={`${pathD} L${xs(data.length-1).toFixed(1)} ${H-PB} L${xs(0).toFixed(1)} ${H-PB} Z`} fill="#a87d49" fillOpacity={0.08}/>}
+      {/* Dots + valores + etiquetas */}
+      {data.map((d,i)=>(
+        <g key={i}>
+          <circle cx={xs(i)} cy={ys(d.value)} r={3.5} fill="#a87d49" stroke="white" strokeWidth={1.5}/>
+          {d.value>0&&<text x={xs(i)} y={ys(d.value)-7} textAnchor="middle" fontSize={8} fill="#a87d49" fontWeight="700">{d.value}{yUnit}</text>}
+          <text x={xs(i)} y={H-PB+12} textAnchor="middle" fontSize={7.5} fill="#8c8377">{d.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/* Gráfica de barras — adherencia semanal */
+function BarChart({data}:{data:{label:string;pct:number}[]}){
+  if(data.length===0)return null;
+  const BAR_W=data.length>6?24:32;
+  const GAP=data.length>6?6:10;
+  const W=Math.max(200,(BAR_W+GAP)*data.length+20),H=80,PB=22,PT=8;
+  const barH=(pct:number)=>((H-PB-PT)*pct/100);
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+      {data.map((d,i)=>{
+        const x=10+i*(BAR_W+GAP);
+        const bh=barH(d.pct);
+        const y=H-PB-bh;
+        return(
+          <g key={i}>
+            <rect x={x} y={y} width={BAR_W} height={Math.max(bh,1)} rx={4} fill={d.pct>=80?"#a87d49":d.pct>=50?"#c4a06a":"#ece6db"}/>
+            {d.pct>0&&<text x={x+BAR_W/2} y={y-3} textAnchor="middle" fontSize={8} fill="#a87d49" fontWeight="700">{d.pct}%</text>}
+            <text x={x+BAR_W/2} y={H-PB+12} textAnchor="middle" fontSize={7.5} fill="#8c8377">{d.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function downloadPdf(client:Client, program:Program) {
   const allSame=program.weeks.length>1&&program.weeks.slice(1).every(w=>weekEq(w,program.weeks[0]));
   const weeksToRender=allSame?[program.weeks[0]]:program.weeks;
@@ -2437,51 +2493,90 @@ export default function RoutineGenerator() {
                   {/* Historial */}
                   {portalTab==="historial" && (
                     <div className="flex flex-col gap-4">
+
+                      {/* Adherencia semanal */}
+                      {portalClient.program && (()=>{
+                        const weeks=portalClient.program!.weeks;
+                        const barData=weeks.map(w=>{
+                          const prog=portalClient.progress.find(p=>p.weekNumber===w.weekNumber);
+                          const done=prog?.completedSessions??0;
+                          const total=portalClient.daysPerWeek;
+                          return{label:`S${w.weekNumber}`,pct:total>0?Math.min(100,Math.round(done/total*100)):0};
+                        });
+                        const totalDone=portalClient.progress.reduce((s,p)=>s+p.completedSessions,0);
+                        const totalSessions=weeks.length*portalClient.daysPerWeek;
+                        return(
+                          <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
+                            <div className="flex items-baseline justify-between mb-4">
+                              <h3 className="font-display text-[17px] font-semibold">Adherencia semanal</h3>
+                              <span className="text-[13px] font-semibold text-[#a87d49]">{totalSessions>0?Math.round(totalDone/totalSessions*100):0}% total</span>
+                            </div>
+                            <BarChart data={barData}/>
+                            <p className="mt-2 text-[10px] text-[#b3aa9b] text-center">{totalDone} de {totalSessions} sesiones completadas</p>
+                          </article>
+                        );
+                      })()}
+
+                      {/* Progresión de carga */}
                       <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
-                        <h3 className="font-display mb-3 text-[18px] font-semibold">Historial por ejercicio</h3>
-                        <label className="block"><span className={labelCls}>Selecciona ejercicio</span>
-                          <select className={inputCls} value={historyExercise} onChange={e=>{setHistoryExercise(e.target.value);if(e.target.value)loadHistory(e.target.value);}}>
-                            <option value="">— elige un ejercicio —</option>
-                            {portalClient.program?.weeks[0]?.days.flatMap(d=>d.selections.map(s=>s.exercise.name)).filter((n,i,a)=>a.indexOf(n)===i).map(n=><option key={n} value={n}>{tx(n)}</option>)}
-                          </select>
-                        </label>
+                        <h3 className="font-display mb-3 text-[17px] font-semibold">Progresión de carga</h3>
+                        <select className={inputCls} value={historyExercise} onChange={e=>{setHistoryExercise(e.target.value);if(e.target.value)loadHistory(e.target.value);}}>
+                          <option value="">— elige un ejercicio —</option>
+                          {portalClient.program?.weeks[0]?.days.flatMap(d=>d.selections.map(s=>s.exercise.name)).filter((n,i,a)=>a.indexOf(n)===i).map(n=><option key={n} value={n}>{tx(n)}</option>)}
+                        </select>
+
+                        {historyLoading && <p className="mt-3 text-sm text-[#a39a8d]">Cargando…</p>}
+
+                        {!historyLoading && historyExercise && historyData.length===0 && (
+                          <p className="mt-3 text-sm text-[#a39a8d]">Sin registros aún para este ejercicio.</p>
+                        )}
+
+                        {historyData.length>0 && (()=>{
+                          const chartData=historyData.map(log=>({
+                            label:`S${log.weekNumber}D${log.dayIndex+1}`,
+                            value:Math.max(...log.setsData.map(s=>s.weightKg),0),
+                          }));
+                          const maxKgAll=Math.max(...chartData.map(d=>d.value),0);
+                          const firstKg=chartData[0]?.value??0;
+                          const lastKg=chartData[chartData.length-1]?.value??0;
+                          const delta=lastKg-firstKg;
+                          return(
+                            <div className="mt-4">
+                              <LineChart data={chartData}/>
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                <div className="rounded-lg bg-[#faf8f4] p-2.5 text-center">
+                                  <div className="font-display text-[18px] font-semibold text-[#a87d49]">{maxKgAll}<span className="text-[10px] font-normal"> kg</span></div>
+                                  <div className="text-[9px] uppercase tracking-wide text-[#9a9186]">Récord</div>
+                                </div>
+                                <div className="rounded-lg bg-[#faf8f4] p-2.5 text-center">
+                                  <div className="font-display text-[18px] font-semibold">{firstKg}<span className="text-[10px] font-normal"> kg</span></div>
+                                  <div className="text-[9px] uppercase tracking-wide text-[#9a9186]">Inicio</div>
+                                </div>
+                                <div className="rounded-lg bg-[#faf8f4] p-2.5 text-center">
+                                  <div className={`font-display text-[18px] font-semibold ${delta>=0?"text-[#2e7d32]":"text-[#c62828]"}`}>{delta>0?"+":""}{delta}<span className="text-[10px] font-normal"> kg</span></div>
+                                  <div className="text-[9px] uppercase tracking-wide text-[#9a9186]">Progreso</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </article>
 
-                      {historyLoading && <p className="text-sm text-[#a39a8d]">Cargando historial…</p>}
-
-                      {!historyLoading && historyExercise && historyData.length===0 && (
-                        <p className="text-sm text-[#a39a8d]">Sin registros aún para {tx(historyExercise)}.</p>
-                      )}
-
+                      {/* Registros detallados */}
                       {historyData.length>0 && (
                         <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
-                          <h4 className="font-display text-[17px] font-semibold mb-4">{tx(historyExercise)}</h4>
-                          <div className="flex flex-col gap-3">
+                          <h4 className="font-display text-[15px] font-semibold mb-3">{tx(historyExercise)} — detalle</h4>
+                          <div className="flex flex-col gap-2">
                             {historyData.map(log=>{
                               const maxKg=Math.max(...log.setsData.map(s=>s.weightKg),0);
-                              const totalReps=log.setsData.reduce((s,l)=>s+(l.completed?l.reps:0),0);
                               const completed=log.setsData.filter(s=>s.completed).length;
-                              return (
-                                <div key={log.id} className="rounded-xl border border-[#ece6db] p-4">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[13px] font-semibold">Sem {log.weekNumber} · Día {log.dayIndex+1}</span>
-                                    <span className="text-[11px] text-[#a39a8d]">{fdt(log.loggedAt)}</span>
+                              return(
+                                <div key={log.id} className="flex items-center justify-between rounded-xl border border-[#ece6db] px-4 py-2.5">
+                                  <span className="text-[13px] font-semibold">Sem {log.weekNumber} · Día {log.dayIndex+1}</span>
+                                  <div className="flex items-center gap-3 text-right">
+                                    <span className="text-[13px] font-semibold text-[#a87d49]">{maxKg}kg</span>
+                                    <span className="text-[11px] text-[#a39a8d]">{completed}/{log.setsData.length} series</span>
                                   </div>
-                                  <div className="mt-2 grid grid-cols-3 gap-2">
-                                    <div className="rounded-lg bg-[#faf8f4] p-2 text-center">
-                                      <div className="font-display text-[20px] font-semibold text-[#a87d49]">{maxKg}<span className="text-[11px] font-normal text-[#9a9186]"> kg</span></div>
-                                      <div className="text-[9.5px] uppercase tracking-[0.06em] text-[#9a9186]">Peso máx</div>
-                                    </div>
-                                    <div className="rounded-lg bg-[#faf8f4] p-2 text-center">
-                                      <div className="font-display text-[20px] font-semibold">{totalReps}</div>
-                                      <div className="text-[9.5px] uppercase tracking-[0.06em] text-[#9a9186]">Reps totales</div>
-                                    </div>
-                                    <div className="rounded-lg bg-[#faf8f4] p-2 text-center">
-                                      <div className="font-display text-[20px] font-semibold">{completed}/{log.setsData.length}</div>
-                                      <div className="text-[9.5px] uppercase tracking-[0.06em] text-[#9a9186]">Series</div>
-                                    </div>
-                                  </div>
-                                  {log.notes && <p className="mt-2 text-[12px] text-[#8c8377]">{log.notes}</p>}
                                 </div>
                               );
                             })}
@@ -2525,6 +2620,18 @@ export default function RoutineGenerator() {
       )}
 
       {/* ── Chat flotante global ── */}
+      {/* WhatsApp flotante — solo para asesorados */}
+      {authSession?.role==="client" && (
+        <a href={`https://wa.me/${COACH_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
+          className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] shadow-lg hover:scale-110 transition-transform"
+          title="WhatsApp con tu coach">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-white">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.118.554 4.107 1.523 5.827L.057 23.886c-.07.358.241.669.599.599l6.059-1.466A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 01-5.001-1.373l-.359-.214-3.727.977.977-3.727-.214-.359A9.793 9.793 0 012.182 12C2.182 6.56 6.56 2.182 12 2.182S21.818 6.56 21.818 12 17.44 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
+
       {authSession && (() => {
         const chatClientId = authSession.role==="client" ? authSession.clientId : selectedClientId;
         const chatClientName = authSession.role==="client"
