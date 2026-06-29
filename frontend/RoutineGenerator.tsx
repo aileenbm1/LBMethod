@@ -549,6 +549,8 @@ function downloadPdf(client:Client, program:Program) {
 export default function RoutineGenerator() {
   /* --- Auth --- */
   const isAsesoradoRoute = window.location.pathname.startsWith("/asesorado");
+  const isRegistroRoute = window.location.pathname.startsWith("/registro");
+  const registroToken = isRegistroRoute ? window.location.pathname.split("/registro/")[1]?.trim() : null;
   const [authRole, setAuthRole] = useState<AuthRole>(isAsesoradoRoute?"client":"coach");
   void setAuthRole; // usado en login de coach cuando expira sesión
   const [loginEmail, setLoginEmail] = useState("");
@@ -672,6 +674,21 @@ export default function RoutineGenerator() {
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
 
+  /* --- Registro público (formulario de invitación) --- */
+  type InviteStatus = "verifying"|"valid"|"invalid"|"submitting"|"done";
+  const [inviteStatus, setInviteStatus] = useState<InviteStatus>("verifying");
+  const [inviteError, setInviteError] = useState("");
+  const [regForm, setRegForm] = useState({name:"",goal:"glute_hypertrophy" as Goal,gender:"unspecified" as Gender,experienceLevel:"beginner" as Level,daysPerWeek:4,sessionDuration:60 as SessionDuration,trainingLocation:"gym" as TrainingLocation,age:"",bodyweightKg:"",monthsTrained:"",homeEquipment:new Set<string>(),injuries:new Set<string>(),focusMuscle:"" as FocusMuscleKey|""});
+  const [regSubmitted, setRegSubmitted] = useState<{pin:string;name:string}|null>(null);
+
+  /* --- Gestión de invitaciones (coach) --- */
+  type InviteRecord = {id:string;token:string;note?:string;expiresAt:string;usedAt?:string;createdUserId?:string;createdAt:string};
+  const [invites, setInvites] = useState<InviteRecord[]>([]);
+  const [inviteNote, setInviteNote] = useState("");
+  const [inviteGenerating, setInviteGenerating] = useState(false);
+  const [showInvitePanel, setShowInvitePanel] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState<string|null>(null);
+
   /* --- Templates de rutinas --- */
   type Template = {id:string;name:string;goal:string;level:string;daysPerWeek:number;totalWeeks:number;createdAt:string};
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -731,6 +748,7 @@ export default function RoutineGenerator() {
     const ds=d.usuarios.map(mapApiClient);setClients(ds);return ds;
   }
 
+  useEffect(()=>{if(registroToken)verifyInviteToken(registroToken);},[]);
   useEffect(()=>{refreshClients().catch(e=>setError(e instanceof Error?e.message:"Error"));},[authSession]);
   useEffect(()=>{if(!authSession){sessionStorage.removeItem(SESSION_KEY);return;}sessionStorage.setItem(SESSION_KEY,JSON.stringify(authSession));},[authSession]);
   useEffect(()=>{if(!clients.some(c=>c.id===selectedClientId))setSelectedClientId(clients[0]?.id??"");},[clients]);
@@ -775,6 +793,7 @@ export default function RoutineGenerator() {
     if(authSession?.role==="coach"){
       loadDashboard();
       loadTemplates();
+      loadInvites();
     }
   },[authSession]);
   // Pre-llenar personalización cuando se selecciona asesorado en Step 2
@@ -1092,6 +1111,74 @@ export default function RoutineGenerator() {
       setSessionFeedbacks(prev=>({...prev,[`${weekNumber}-${dayIndex}`]:feeling}));
     }catch{}
     finally{setFeedbackSaving(false);}
+  }
+
+  // ── Registro público ─────────────────────────────────────────────────────
+  async function verifyInviteToken(token:string){
+    setInviteStatus("verifying");
+    try{
+      const res=await fetch(`${API}/invites/verify/${token}`);
+      const d=await res.json() as {valid?:boolean;error?:string};
+      if(!res.ok||!d.valid){setInviteError(d.error??"Invitación inválida.");setInviteStatus("invalid");return;}
+      setInviteStatus("valid");
+    }catch{setInviteError("No se pudo verificar la invitación.");setInviteStatus("invalid");}
+  }
+
+  async function submitRegistro(){
+    if(!registroToken)return;
+    setInviteStatus("submitting");
+    try{
+      const monthsMap:Record<string,number>={"Menos de 6 meses":3,"6–12 meses":9,"1–2 años":18,"Más de 2 años":30};
+      const body:Record<string,unknown>={
+        name:regForm.name.trim(),goal:regForm.goal,experienceLevel:regForm.experienceLevel,
+        daysPerWeek:regForm.daysPerWeek,gender:regForm.gender,sessionDuration:regForm.sessionDuration,
+        trainingLocation:regForm.trainingLocation,
+        age:regForm.age?Number(regForm.age):undefined,
+        bodyweightKg:regForm.bodyweightKg?Number(regForm.bodyweightKg):undefined,
+        monthsTrained:regForm.monthsTrained?monthsMap[regForm.monthsTrained]:undefined,
+        homeEquipment:regForm.trainingLocation==="home"&&regForm.homeEquipment.size>0?[...regForm.homeEquipment]:undefined,
+        limitations:[...regForm.injuries].map(z=>({description:`Molestia en ${z}`,affectedPatterns:["knee_dominant","hip_hinge"],severity:"mild"})),
+        weakPoints:regForm.focusMuscle&&regForm.focusMuscle!=="upper_body"?[{muscleGroup:regForm.focusMuscle,priority:3}]:undefined,
+      };
+      const res=await fetch(`${API}/invites/${registroToken}/registro`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const d=await res.json() as {client?:{name:string};generatedPin?:string;error?:string};
+      if(!res.ok) throw new Error(d.error??"Error al enviar formulario.");
+      setRegSubmitted({pin:d.generatedPin??"",name:d.client?.name??regForm.name});
+      setInviteStatus("done");
+    }catch(e){setInviteError(e instanceof Error?e.message:"Error");setInviteStatus("valid");}
+  }
+
+  // ── Invitaciones del coach ────────────────────────────────────────────────
+  async function loadInvites(){
+    try{
+      const res=await apiFetch("/invites");
+      if(!res.ok)return;
+      const d=await res.json() as {invites:InviteRecord[]};
+      setInvites(d.invites);
+    }catch{}
+  }
+
+  async function generateInvite(){
+    setInviteGenerating(true);
+    try{
+      const res=await apiFetch("/invites",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note:inviteNote.trim()||undefined})});
+      if(!res.ok)return;
+      setInviteNote("");
+      await loadInvites();
+    }catch{}
+    finally{setInviteGenerating(false);}
+  }
+
+  async function revokeInvite(id:string){
+    try{
+      await apiFetch(`/invites/${id}`,{method:"DELETE"});
+      setInvites(prev=>prev.filter(i=>i.id!==id));
+    }catch{}
+  }
+
+  function copyInviteLink(token:string){
+    const url=`${window.location.origin}/registro/${token}`;
+    navigator.clipboard.writeText(url).then(()=>{setCopiedInvite(token);setTimeout(()=>setCopiedInvite(null),2500);});
   }
 
   async function loadCheckIns(clientId:string){
@@ -1442,6 +1529,184 @@ export default function RoutineGenerator() {
 
   const visibleTabs=[{id:"coach" as Tab,label:"Coach Studio"},{id:"clients" as Tab,label:"Asesorados"},{id:"portal" as Tab,label:"Portal"}];
   const navTabs=authSession?.role==="coach"?visibleTabs:visibleTabs.filter(t=>t.id==="portal");
+
+  /* ===================================================================
+     FORMULARIO DE REGISTRO (ruta /registro/:token)
+     =================================================================== */
+  if(isRegistroRoute) return (
+    <div className="min-h-screen bg-[#f4f1ea] flex items-center justify-center p-4">
+      <div className="w-full max-w-lg">
+        {/* Header */}
+        <div className="mb-6 text-center">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#17120d] mb-3">
+            <span className="font-display text-2xl font-bold text-[#a87d49]">LB</span>
+          </div>
+          <h1 className="font-display text-[28px] font-semibold text-[#17120d]">LB Method</h1>
+          <p className="text-[13px] text-[#8c8377]">Formulario de registro</p>
+        </div>
+
+        {/* Verificando token */}
+        {inviteStatus==="verifying" && (
+          <div className="rounded-[20px] bg-white p-8 text-center">
+            <div className="text-3xl mb-3">⏳</div>
+            <p className="text-[14px] text-[#8c8377]">Verificando invitación…</p>
+          </div>
+        )}
+
+        {/* Token inválido/expirado */}
+        {inviteStatus==="invalid" && (
+          <div className="rounded-[20px] bg-white p-8 text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <h2 className="font-display text-[20px] font-semibold text-[#17120d]">Invitación no válida</h2>
+            <p className="mt-2 text-[13px] text-[#8c8377]">{inviteError}</p>
+            <p className="mt-3 text-[12px] text-[#b3aa9b]">Pide a tu coach que genere una nueva invitación.</p>
+          </div>
+        )}
+
+        {/* Registro completado */}
+        {inviteStatus==="done" && regSubmitted && (
+          <div className="rounded-[20px] bg-[#17120d] p-8 text-center text-[#f4f1ea]">
+            <div className="text-5xl mb-4">🎉</div>
+            <h2 className="font-display text-[24px] font-semibold">¡Registro completado!</h2>
+            <p className="mt-2 text-[13px] text-[#b7ad9d]">Hola, {regSubmitted.name}. Tu perfil fue creado.</p>
+            <div className="mt-5 rounded-2xl bg-white/10 p-5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a87d49] mb-2">Tu PIN de acceso</div>
+              <div className="font-mono text-[36px] font-bold tracking-[0.2em]">{regSubmitted.pin}</div>
+              <p className="mt-2 text-[11px] text-[#9a9186]">Guárdalo — lo necesitarás para entrar a la app.</p>
+            </div>
+            <p className="mt-4 text-[12px] text-[#9a9186]">Tu coach generará tu rutina personalizada y te avisará cuando esté lista.</p>
+            <a href="/asesorado" className="mt-5 inline-block rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white">
+              Ir a la app →
+            </a>
+          </div>
+        )}
+
+        {/* Formulario */}
+        {(inviteStatus==="valid"||inviteStatus==="submitting") && (
+          <div className="rounded-[20px] bg-white p-6 sm:p-8 flex flex-col gap-4">
+            <h2 className="font-display text-[22px] font-semibold text-[#17120d]">Cuéntame sobre ti</h2>
+            <p className="text-[12px] text-[#8c8377] -mt-2">Con estos datos generaré tu rutina 100% personalizada.</p>
+
+            {inviteError && <p className="rounded-xl bg-[#f7ece6] p-3 text-sm text-[#9a4b34]">{inviteError}</p>}
+
+            {/* Nombre */}
+            <label className="block"><span className={labelCls}>Nombre completo *</span>
+              <input className={inputCls} placeholder="Ej. María García" value={regForm.name} onChange={e=>setRegForm(p=>({...p,name:e.target.value}))}/>
+            </label>
+
+            {/* Género */}
+            <div><span className={labelCls}>Género</span>
+              <div className="mt-1.5 flex gap-1.5 rounded-2xl bg-[#ece6db] p-1.5">
+                {(Object.entries(GENDER_LABELS) as [Gender,string][]).map(([v,l])=>(
+                  <button key={v} onClick={()=>setRegForm(p=>({...p,gender:v}))}
+                    className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${regForm.gender===v?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>{l}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Objetivo */}
+            <label className="block"><span className={labelCls}>Objetivo principal *</span>
+              <select className={inputCls} value={regForm.goal} onChange={e=>setRegForm(p=>({...p,goal:e.target.value as Goal}))}>
+                {GOALS_BY_GENDER[regForm.gender].map(g=><option key={g} value={g}>{GOAL_LABELS[g]}</option>)}
+              </select>
+            </label>
+
+            {/* Nivel + Días */}
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block"><span className={labelCls}>Nivel *</span>
+                <select className={inputCls} value={regForm.experienceLevel} onChange={e=>setRegForm(p=>({...p,experienceLevel:e.target.value as Level}))}>
+                  {(Object.keys(LEVEL_LABELS) as Level[]).map(l=><option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
+                </select>
+              </label>
+              <label className="block"><span className={labelCls}>Días/semana *</span>
+                <select className={inputCls} value={regForm.daysPerWeek} onChange={e=>setRegForm(p=>({...p,daysPerWeek:Number(e.target.value)}))}>
+                  {[3,4,5,6].map(d=><option key={d} value={d}>{d} días</option>)}
+                </select>
+              </label>
+            </div>
+
+            {/* Duración */}
+            <div><span className={labelCls}>Duración por sesión</span>
+              <div className="mt-1.5 flex gap-1.5 rounded-2xl bg-[#ece6db] p-1.5">
+                {SESSION_DURATION_OPTIONS.map(({v,l})=>(
+                  <button key={v} onClick={()=>setRegForm(p=>({...p,sessionDuration:v}))}
+                    className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${regForm.sessionDuration===v?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>{l}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Lugar */}
+            <div><span className={labelCls}>Lugar de entrenamiento</span>
+              <div className="mt-1.5 flex gap-1.5 rounded-2xl bg-[#ece6db] p-1.5">
+                {([["gym","Gimnasio"],["home","En casa"]] as [TrainingLocation,string][]).map(([v,l])=>(
+                  <button key={v} onClick={()=>setRegForm(p=>({...p,trainingLocation:v}))}
+                    className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${regForm.trainingLocation===v?"bg-[#17120d] text-white":"text-[#8c8377]"}`}>{l}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Equipamiento en casa */}
+            {regForm.trainingLocation==="home" && (
+              <div><span className={labelCls}>Equipamiento disponible</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {([["bodyweight","Peso corporal"],["dumbbell","Mancuernas"],["band","Bandas"],["kettlebell","Pesas rusas"],["barbell","Barra"]] as [string,string][]).map(([eq,label])=>{
+                    const on=regForm.homeEquipment.has(eq);
+                    return <button key={eq} onClick={()=>setRegForm(p=>{const n=new Set(p.homeEquipment);on?n.delete(eq):n.add(eq);return{...p,homeEquipment:n};})}
+                      className={`rounded-xl px-3 py-2 text-[12px] font-semibold border transition ${on?"border-[#a87d49] bg-[#a87d49] text-white":"border-[#e0d9cc] text-[#8c8377]"}`}>{label}</button>;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Edad + Peso */}
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block"><span className={labelCls}>Edad <span className="font-normal text-[#b3aa9b]">(opcional)</span></span>
+                <input className={inputCls} type="number" min={12} max={90} placeholder="28" value={regForm.age} onChange={e=>setRegForm(p=>({...p,age:e.target.value}))}/>
+              </label>
+              <label className="block"><span className={labelCls}>Peso kg <span className="font-normal text-[#b3aa9b]">(opcional)</span></span>
+                <input className={inputCls} type="number" min={30} max={250} step={0.5} placeholder="65" value={regForm.bodyweightKg} onChange={e=>setRegForm(p=>({...p,bodyweightKg:e.target.value}))}/>
+              </label>
+            </div>
+
+            {/* Historial */}
+            <div><span className={labelCls}>¿Cuánto tiempo llevas entrenando?</span>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {(["Menos de 6 meses","6–12 meses","1–2 años","Más de 2 años"]).map(opt=>(
+                  <button key={opt} onClick={()=>setRegForm(p=>({...p,monthsTrained:p.monthsTrained===opt?"":opt}))}
+                    className={`rounded-xl px-3 py-2 text-[12px] font-semibold border transition ${regForm.monthsTrained===opt?"border-[#a87d49] bg-[#a87d49] text-white":"border-[#e0d9cc] text-[#8c8377]"}`}>{opt}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Lesiones */}
+            <div><span className={labelCls}>Lesiones o molestias <span className="font-normal text-[#b3aa9b]">(opcional)</span></span>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {(["Rodilla","Espalda baja","Hombro","Cadera","Tobillo","Muñeca","Cuello"]).map(z=>{
+                  const on=regForm.injuries.has(z);
+                  return <button key={z} onClick={()=>setRegForm(p=>{const n=new Set(p.injuries);on?n.delete(z):n.add(z);return{...p,injuries:n};})}
+                    className={`rounded-xl px-3 py-2 text-[12px] font-semibold border transition ${on?"border-[#9a4b34] bg-[#9a4b34] text-white":"border-[#e0d9cc] text-[#8c8377]"}`}>{z}</button>;
+                })}
+              </div>
+            </div>
+
+            {/* Músculo prioritario */}
+            <label className="block"><span className={labelCls}>¿En qué músculo quieres enfocarte? <span className="font-normal text-[#b3aa9b]">(opcional)</span></span>
+              <select className={inputCls} value={regForm.focusMuscle} onChange={e=>setRegForm(p=>({...p,focusMuscle:e.target.value as FocusMuscleKey|""}))}>
+                <option value="">Sin preferencia específica</option>
+                {ALL_FOCUS_OPTIONS.map(o=><option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </label>
+
+            <button onClick={submitRegistro} disabled={!regForm.name.trim()||inviteStatus==="submitting"}
+              className={`mt-2 w-full py-4 text-[15px] font-semibold ${primaryBtn}`}>
+              {inviteStatus==="submitting"?"Enviando…":"Enviar mis datos →"}
+            </button>
+            <p className="text-center text-[11px] text-[#b3aa9b]">Tu información es privada y solo la verá tu coach.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   /* ===================================================================
      LOGIN SCREEN
@@ -2165,6 +2430,59 @@ export default function RoutineGenerator() {
                 </button>
               );})}
               {clients.length===0 && <div className="rounded-2xl border border-dashed border-[#dcd4c5] p-6 text-center"><p className="text-sm text-[#a39a8d]">Sin asesorados aún.</p><button onClick={()=>setActiveTab("coach")} className={`mt-3 px-5 py-2.5 text-sm ${primaryBtn}`}>+ Agregar</button></div>}
+
+              {/* Botón generar invitación */}
+              <button onClick={()=>setShowInvitePanel(!showInvitePanel)}
+                className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-left transition ${showInvitePanel?"border-[#a87d49] bg-[#fdfbf7]":"border-[#e7e1d6] bg-white hover:border-[#d8cdb8]"}`}>
+                <span className="text-lg">🔗</span>
+                <div>
+                  <div className="text-[13px] font-semibold">Invitaciones de registro</div>
+                  <div className="text-[11px] text-[#a39a8d]">{invites.filter(i=>!i.usedAt&&new Date(i.expiresAt)>new Date()).length} activas</div>
+                </div>
+              </button>
+
+              {showInvitePanel && (
+                <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-5 flex flex-col gap-3">
+                  <div className="flex gap-2">
+                    <input className={`flex-1 ${inputCls}`} placeholder="Nota: para quién es (opcional)" value={inviteNote} onChange={e=>setInviteNote(e.target.value)}/>
+                    <button onClick={generateInvite} disabled={inviteGenerating} className={`flex-none px-4 py-2 text-sm ${primaryBtn}`}>
+                      {inviteGenerating?"…":"+ Generar"}
+                    </button>
+                  </div>
+                  {invites.length===0 && <p className="text-[12px] text-[#a39a8d] text-center py-2">Sin invitaciones aún.</p>}
+                  {invites.map(inv=>{
+                    const used=!!inv.usedAt;
+                    const expired=!used&&new Date(inv.expiresAt)<new Date();
+                    const active=!used&&!expired;
+                    return(
+                      <div key={inv.id} className={`rounded-[14px] border px-4 py-3 ${active?"border-[#e7e1d6]":used?"border-[#d4edd4] bg-[#f6fff6]":"border-[#ece6db] bg-[#fafaf9]"}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            {inv.note && <div className="text-[13px] font-semibold truncate">{inv.note}</div>}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${active?"bg-[#f0e7d8] text-[#8f6a3c]":used?"bg-[#d4edd4] text-[#2e7d32]":"bg-[#ece6db] text-[#9a9186]"}`}>
+                                {active?"Activa":used?"Usada":"Expirada"}
+                              </span>
+                              {active && <span className="text-[10px] text-[#a39a8d]">Expira {new Date(inv.expiresAt).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-1.5 flex-none">
+                            {active && (
+                              <button onClick={()=>copyInviteLink(inv.token)}
+                                className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${copiedInvite===inv.token?"bg-[#a87d49] text-white":"border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49]"}`}>
+                                {copiedInvite===inv.token?"✓ Copiado":"Copiar link"}
+                              </button>
+                            )}
+                            {!used && (
+                              <button onClick={()=>revokeInvite(inv.id)} className="rounded-xl px-2 py-1.5 text-[11px] text-[#c62828] hover:bg-[#fde8e8]">✕</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Alertas de inactividad */}
               {dashboardData.filter(d=>d.inactive).length>0 && (

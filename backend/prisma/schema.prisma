@@ -436,6 +436,22 @@ model ProgressPhoto {
 }
 
 // ---------------------------------------------------------------------------
+// Invitaciones de registro
+// ---------------------------------------------------------------------------
+
+model Invite {
+  id            String    @id @default(cuid())
+  token         String    @unique  // 32 hex chars, imposible de adivinar
+  note          String?            // referencia del coach ("María García")
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdUserId String?            // ID del usuario creado con esta invitación
+  createdAt     DateTime  @default(now())
+
+  @@index([token])
+}
+
+// ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
 

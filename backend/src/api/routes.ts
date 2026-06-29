@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { timingSafeEqual } from "crypto";
+import { timingSafeEqual, randomBytes } from "crypto";
 import multer from "multer";
 
 // Multer en memoria para fotos de progreso (se suben a Supabase Storage)
@@ -8,7 +8,7 @@ const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize
 import { PrismaClient } from "@prisma/client";
 import type { RoutineService } from "./RoutineService";
 import {
-  clearClientAttempts, clearCoachAttempts, isClientLocked, isCoachLocked,
+  clearasesoradattempts, clearCoachAttempts, isClientLocked, isCoachLocked,
   isCoach2FAPending, recordClientFailedAttempt, recordCoachFailedAttempt,
   resendCoachCode, verifyCoachCode,
 } from "./TwoFactorService";
@@ -185,7 +185,7 @@ export function buildRouter(service: RoutineService): Router {
       if (!isHashed) {
         await service.setClientPin(usuario.id, enteredPin);
       }
-      clearClientAttempts(identifier);
+      clearasesoradattempts(identifier);
       const claims = {
         role: "client" as const,
         clientId: usuario.id,
@@ -395,10 +395,10 @@ export function buildRouter(service: RoutineService): Router {
       return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
     }
 
-    // Clientes solo pueden usar "replace" en su propia rutina
+    // asesorados solo pueden usar "replace" en su propia rutina
     if (auth.role === "client") {
       if (parsed.data.action !== "replace") {
-        return res.status(403).json({ error: "Forbidden", message: "Los clientes solo pueden cambiar ejercicios individuales." });
+        return res.status(403).json({ error: "Forbidden", message: "Los asesorados solo pueden cambiar ejercicios individuales." });
       }
       const stored = await service.getProgram(req.params.id).catch(() => null);
       if (!stored || stored.clientId !== auth.clientId) {
@@ -548,6 +548,75 @@ export function buildRouter(service: RoutineService): Router {
     try {
       const feedbacks = await prisma.sessionFeedback.findMany({ where: { userId: req.params.id } });
       return res.json({ feedbacks });
+    } catch (err) { return next(err); }
+  });
+
+  // ── Invitaciones de registro ──────────────────────────────────────────────
+
+  // Generar invitación (coach)
+  router.post("/invites", requireRole("coach"), async (req, res, next) => {
+    const { note } = req.body as { note?: string };
+    try {
+      const token = randomBytes(16).toString("hex"); // 32 chars hex
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días
+      const invite = await prisma.invite.create({
+        data: { token, note: note?.trim() || null, expiresAt },
+        select: { id: true, token: true, note: true, expiresAt: true, createdAt: true },
+      });
+      return res.status(201).json({ invite });
+    } catch (err) { return next(err); }
+  });
+
+  // Listar invitaciones del coach
+  router.get("/invites", requireRole("coach"), async (_req, res, next) => {
+    try {
+      const invites = await prisma.invite.findMany({
+        orderBy: { createdAt: "desc" },
+        select: { id: true, token: true, note: true, expiresAt: true, usedAt: true, createdUserId: true, createdAt: true },
+      });
+      return res.json({ invites });
+    } catch (err) { return next(err); }
+  });
+
+  // Revocar invitación (coach)
+  router.delete("/invites/:id", requireRole("coach"), async (req, res, next) => {
+    try {
+      await prisma.invite.delete({ where: { id: req.params.id } });
+      return res.json({ ok: true });
+    } catch (err) { return next(err); }
+  });
+
+  // Verificar token (público — para mostrar el formulario)
+  router.get("/invites/verify/:token", async (req, res, next) => {
+    try {
+      const invite = await prisma.invite.findUnique({ where: { token: req.params.token } });
+      if (!invite) return res.status(404).json({ error: "Invitación no encontrada." });
+      if (invite.usedAt) return res.status(410).json({ error: "Esta invitación ya fue utilizada." });
+      if (invite.expiresAt < new Date()) return res.status(410).json({ error: "Esta invitación expiró." });
+      return res.json({ valid: true, note: invite.note });
+    } catch (err) { return next(err); }
+  });
+
+  // Enviar formulario de registro (público)
+  router.post("/invites/:token/registro", async (req, res, next) => {
+    try {
+      const invite = await prisma.invite.findUnique({ where: { token: req.params.token } });
+      if (!invite) return res.status(404).json({ error: "Invitación no encontrada." });
+      if (invite.usedAt) return res.status(410).json({ error: "Esta invitación ya fue utilizada." });
+      if (invite.expiresAt < new Date()) return res.status(410).json({ error: "Esta invitación expiró." });
+
+      const parsed = createClientSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
+
+      const { client, generatedPin } = await service.createClient(parsed.data);
+
+      // Marcar invitación como usada
+      await prisma.invite.update({
+        where: { token: req.params.token },
+        data: { usedAt: new Date(), createdUserId: client.id },
+      });
+
+      return res.status(201).json({ client, generatedPin });
     } catch (err) { return next(err); }
   });
 
