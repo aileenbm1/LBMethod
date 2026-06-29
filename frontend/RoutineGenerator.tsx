@@ -199,6 +199,7 @@ const METHOD_TAG: Record<TrainingMethod, { emoji: string; cls: string }> = {
 
 const API = import.meta.env.VITE_API_URL??"/api";
 const SESSION_KEY = "lbmethod_session_v1";
+const COACH_WHATSAPP = import.meta.env.VITE_COACH_WHATSAPP ?? "524733543649";
 
 /* ===================================================================
    HELPERS
@@ -2046,6 +2047,41 @@ export default function RoutineGenerator() {
                             const nextDayInWeek=allDays.find(d=>d.dayIndex===logDay+1);
                             const nextWeek=allWeeks.find(w=>w.weekNumber===logWeek+1);
                             const hasNextDay=!!nextDayInWeek||(!!nextWeek&&nextWeek.days.length>0);
+                            const isProgramComplete=!hasNextDay; // última sesión del programa
+
+                            // ── Pantalla de programa completado (renovación) ──
+                            if(isProgramComplete) return (
+                              <div className="flex flex-col gap-4">
+                                <div className="rounded-[18px] bg-[#17120d] p-8 text-center text-[#f4f1ea]">
+                                  <div className="text-5xl mb-3">🏆</div>
+                                  <h3 className="font-display text-[26px] font-semibold">¡Completaste tu programa!</h3>
+                                  <p className="mt-2 text-[13px] text-[#b7ad9d]">{allWeeks.length} semanas · {portalClient.daysPerWeek} días/sem</p>
+                                  <p className="mt-1 text-[12px] text-[#9a9186]">Entrenaste con constancia. Tu cuerpo lo sabe.</p>
+                                </div>
+                                <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                                  <h4 className="font-display text-[18px] font-semibold text-center">¿Quieres continuar entrenando?</h4>
+                                  <p className="mt-1 text-[13px] text-[#8c8377] text-center">Contáctate con tu coach para renovar tu plan.</p>
+                                  <div className="mt-5 flex flex-col gap-3">
+                                    {/* WhatsApp */}
+                                    <a href={`https://wa.me/${COACH_WHATSAPP}?text=${encodeURIComponent("¡Hola! Terminé mi programa de entrenamiento y quiero renovar mi plan 💪")}`}
+                                      target="_blank" rel="noopener noreferrer"
+                                      className="flex items-center justify-center gap-2.5 rounded-xl bg-[#25D366] py-3.5 text-[15px] font-semibold text-white hover:opacity-90">
+                                      <svg viewBox="0 0 24 24" className="h-5 w-5 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.118.554 4.107 1.523 5.827L.057 23.886c-.07.358.241.669.599.599l6.059-1.466A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 01-5.001-1.373l-.359-.214-3.727.977.977-3.727-.214-.359A9.793 9.793 0 012.182 12C2.182 6.56 6.56 2.182 12 2.182S21.818 6.56 21.818 12 17.44 21.818 12 21.818z"/></svg>
+                                      Escribir por WhatsApp
+                                    </a>
+                                    {/* Chat en app */}
+                                    <button onClick={()=>setPortalTab("chat")}
+                                      className="flex items-center justify-center gap-2.5 rounded-xl border-2 border-[#17120d] py-3.5 text-[15px] font-semibold text-[#17120d] hover:bg-[#17120d] hover:text-white transition">
+                                      💬 Chat con mi coach
+                                    </button>
+                                  </div>
+                                </div>
+                                <button onClick={()=>{setSessionComplete(false);setSavedExercises(new Set());setExerciseLogs({});setLogNotes({});}}
+                                  className="text-center text-[12px] text-[#a39a8d] hover:text-[#17120d]">Ver mi historial</button>
+                              </div>
+                            );
+
+                            // ── Pantalla de sesión completada normal ──
                             return (
                               <div className="rounded-[18px] bg-[#17120d] p-8 text-center text-[#f4f1ea]">
                                 <div className="text-5xl mb-3">🎉</div>
@@ -2053,14 +2089,12 @@ export default function RoutineGenerator() {
                                 <p className="mt-2 text-[13px] text-[#b7ad9d]">Semana {logWeek} · Día {logDay+1} — {FOCUS_LABELS[currentDayData?.focus??""]??""}</p>
                                 <p className="mt-1 text-[11px] text-[#9a9186]">Tus datos quedaron guardados</p>
                                 <div className="mt-5 flex flex-col gap-2.5 items-center">
-                                  {hasNextDay && (
-                                    <button onClick={()=>{
-                                      if(nextDayInWeek) goToDay(logWeek,logDay+1);
-                                      else if(nextWeek) goToDay(logWeek+1,nextWeek.days[0].dayIndex);
-                                    }} className="w-full max-w-[240px] rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white hover:bg-[#8f6538]">
-                                      Siguiente sesión →
-                                    </button>
-                                  )}
+                                  <button onClick={()=>{
+                                    if(nextDayInWeek) goToDay(logWeek,logDay+1);
+                                    else if(nextWeek) goToDay(logWeek+1,nextWeek.days[0].dayIndex);
+                                  }} className="w-full max-w-[240px] rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white hover:bg-[#8f6538]">
+                                    Siguiente sesión →
+                                  </button>
                                   <button onClick={()=>{setSessionComplete(false);setSavedExercises(new Set());setExerciseLogs({});setLogNotes({});}}
                                     className="w-full max-w-[240px] rounded-xl border border-white/20 px-6 py-2.5 text-sm font-semibold text-white/70 hover:text-white">
                                     Ver otro día
