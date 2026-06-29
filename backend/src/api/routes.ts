@@ -409,14 +409,30 @@ export function buildRouter(service: RoutineService): Router {
     } catch (err) { return next(err); }
   });
 
-  router.post("/usuario/:id/logs", async (req, res, next) => {
+  router.post("/usuario/:id/logs", requireAuth, async (req, res, next) => {
     const auth = (req as AuthedRequest).auth;
     if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
     const parsed = exerciseLogSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
     try {
       const log = await service.saveExerciseLog(req.params.id, parsed.data);
-      return res.status(201).json({ log });
+
+      // Detectar récord personal (PR)
+      let isPR = false;
+      let previousBest = 0;
+      const newMaxKg = Math.max(...(parsed.data.setsData as {weightKg:number;completed:boolean}[])
+        .filter(s => s.completed).map(s => s.weightKg), 0);
+
+      if (newMaxKg > 0) {
+        const history = await service.getExerciseHistory(req.params.id, parsed.data.exerciseName);
+        // Excluir el log recién guardado comparando por weekNumber+dayIndex
+        const prevMax = Math.max(...history
+          .filter(h => !(h.weekNumber === parsed.data.weekNumber && h.dayIndex === parsed.data.dayIndex))
+          .flatMap(h => (h.setsData as {weightKg:number;completed:boolean}[]).filter(s=>s.completed).map(s=>s.weightKg)), 0);
+        if (newMaxKg > prevMax) { isPR = true; previousBest = prevMax; }
+      }
+
+      return res.status(201).json({ log, isPR, newMaxKg, previousBest });
     } catch (err) { return next(err); }
   });
 
@@ -510,6 +526,39 @@ export function buildRouter(service: RoutineService): Router {
     try {
       const feedbacks = await prisma.sessionFeedback.findMany({ where: { userId: req.params.id } });
       return res.json({ feedbacks });
+    } catch (err) { return next(err); }
+  });
+
+  // ── Medidas corporales ────────────────────────────────────────────────────
+  router.post("/usuario/:id/medidas", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    const { hipCm, waistCm, thighCm, armCm, chestCm, notes } = req.body as Record<string,number|string|undefined>;
+    try {
+      const log = await prisma.measurementLog.create({
+        data: {
+          userId: req.params.id,
+          hipCm: hipCm ? Number(hipCm) : undefined,
+          waistCm: waistCm ? Number(waistCm) : undefined,
+          thighCm: thighCm ? Number(thighCm) : undefined,
+          armCm: armCm ? Number(armCm) : undefined,
+          chestCm: chestCm ? Number(chestCm) : undefined,
+          notes: typeof notes === "string" ? notes : undefined,
+        },
+      });
+      return res.status(201).json({ log });
+    } catch (err) { return next(err); }
+  });
+
+  router.get("/usuario/:id/medidas", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const logs = await prisma.measurementLog.findMany({
+        where: { userId: req.params.id },
+        orderBy: { loggedAt: "asc" },
+      });
+      return res.json({ logs });
     } catch (err) { return next(err); }
   });
 

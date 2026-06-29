@@ -644,6 +644,15 @@ export default function RoutineGenerator() {
   const [restTimer, setRestTimer] = useState<{secs:number;total:number;label:string}|null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
+  /* --- Récord personal (PR) --- */
+  const [prAlert, setPrAlert] = useState<{name:string;kg:number;prev:number}|null>(null);
+
+  /* --- Medidas corporales --- */
+  type MeasLog = {id:string;hipCm?:number;waistCm?:number;thighCm?:number;armCm?:number;chestCm?:number;notes?:string;loggedAt:string};
+  const [measurementLogs, setMeasurementLogs] = useState<MeasLog[]>([]);
+  const [measForm, setMeasForm] = useState({hip:"",waist:"",thigh:"",arm:"",chest:"",notes:""});
+  const [measSaving, setMeasSaving] = useState(false);
+
   /* --- Fotos de progreso --- */
   const [progressPhotos, setProgressPhotos] = useState<{id:string;url:string;notes?:string;takenAt:string}[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -709,6 +718,7 @@ export default function RoutineGenerator() {
       setActiveTab("portal");
       loadWeightLogs(authSession.clientId);
       loadProgressPhotos(authSession.clientId);
+      loadMeasurements(authSession.clientId);
       // Cargar feedback previo
       apiFetch(`/usuario/${authSession.clientId}/feedback`).then(r=>r.json()).then((d:any)=>{
         if(d.feedbacks){const m:Record<string,string>={};for(const f of d.feedbacks)m[`${f.weekNumber}-${f.dayIndex}`]=f.feeling;setSessionFeedbacks(m);}
@@ -959,7 +969,9 @@ export default function RoutineGenerator() {
     if(!sets||sets.length===0)return;
     setLogSaving(true);
     try{
-      await apiFetch(`/usuario/${portalClientId}/logs`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({weekNumber:logWeek,dayIndex:logDay,exerciseName,setsData:sets,notes:logNotes[exerciseName]||""})});
+      const res=await apiFetch(`/usuario/${portalClientId}/logs`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({weekNumber:logWeek,dayIndex:logDay,exerciseName,setsData:sets,notes:logNotes[exerciseName]||""})});
+      const d=await res.json().catch(()=>({})) as {isPR?:boolean;newMaxKg?:number;previousBest?:number};
+      if(d.isPR && d.newMaxKg) setPrAlert({name:tx(exerciseName),kg:d.newMaxKg,prev:d.previousBest??0});
       setSavedExercises(prev=>{
         const next=new Set(prev);next.add(exerciseName);
         if(allNames && next.size>=allNames.length) setSessionComplete(true);
@@ -1033,6 +1045,32 @@ export default function RoutineGenerator() {
       setSessionFeedbacks(prev=>({...prev,[`${weekNumber}-${dayIndex}`]:feeling}));
     }catch{}
     finally{setFeedbackSaving(false);}
+  }
+
+  async function loadMeasurements(clientId:string){
+    try{
+      const res=await apiFetch(`/usuario/${clientId}/medidas`);
+      if(!res.ok)return;
+      const d=await res.json() as {logs:MeasLog[]};
+      setMeasurementLogs(d.logs);
+    }catch{}
+  }
+
+  async function saveMeasurement(){
+    if(!portalClientId)return;
+    const {hip,waist,thigh,arm,chest,notes}=measForm;
+    if(!hip&&!waist&&!thigh&&!arm&&!chest)return;
+    setMeasSaving(true);
+    try{
+      await apiFetch(`/usuario/${portalClientId}/medidas`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        hipCm:hip?Number(hip):undefined,waistCm:waist?Number(waist):undefined,
+        thighCm:thigh?Number(thigh):undefined,armCm:arm?Number(arm):undefined,
+        chestCm:chest?Number(chest):undefined,notes:notes||undefined,
+      })});
+      setMeasForm({hip:"",waist:"",thigh:"",arm:"",chest:"",notes:""});
+      await loadMeasurements(portalClientId);
+    }catch(e){setError(e instanceof Error?e.message:"Error al guardar")}
+    finally{setMeasSaving(false);}
   }
 
   function startRestTimer(role:string, exerciseName:string){
@@ -2832,6 +2870,62 @@ export default function RoutineGenerator() {
                         )}
                       </article>
 
+                      {/* Medidas corporales */}
+                      <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
+                        <h3 className="font-display text-[17px] font-semibold mb-4">Medidas corporales</h3>
+
+                        {/* Gráficas si hay datos */}
+                        {measurementLogs.length>=2 && (()=>{
+                          const metrics:[string,keyof MeasLog,string][]=[
+                            ["Cadera","hipCm","cm"],["Cintura","waistCm","cm"],
+                            ["Muslo","thighCm","cm"],["Brazo","armCm","cm"],
+                          ];
+                          return(
+                            <div className="mb-4 grid grid-cols-2 gap-3">
+                              {metrics.map(([label,key,unit])=>{
+                                const data=measurementLogs.filter(l=>l[key]!=null).map(l=>({
+                                  label:new Date(l.loggedAt).toLocaleDateString("es-MX",{day:"2-digit",month:"short"}),
+                                  value:l[key] as number,
+                                }));
+                                if(data.length<2)return null;
+                                const first=data[0].value,last=data[data.length-1].value;
+                                const delta=last-first;
+                                return(
+                                  <div key={key} className="rounded-[14px] border border-[#ece6db] p-3">
+                                    <div className="flex items-baseline justify-between mb-2">
+                                      <span className="text-[12px] font-semibold">{label}</span>
+                                      <span className={`text-[12px] font-bold ${delta<=0?"text-[#2e7d32]":"text-[#a87d49]"}`}>{delta>0?"+":""}{delta.toFixed(1)}{unit}</span>
+                                    </div>
+                                    <LineChart data={data} yUnit={unit}/>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Formulario */}
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {([["hip","Cadera cm"],["waist","Cintura cm"],["thigh","Muslo cm"],["arm","Brazo cm"],["chest","Pecho cm"]] as [keyof typeof measForm,string][]).map(([k,label])=>(
+                            <label key={k} className="block">
+                              <span className={labelCls}>{label}</span>
+                              <input type="number" inputMode="decimal" step={0.1} min={20} max={200} className={inputCls} placeholder="—"
+                                value={measForm[k]} onChange={e=>setMeasForm(prev=>({...prev,[k]:e.target.value}))}/>
+                            </label>
+                          ))}
+                        </div>
+                        <input className={`mt-2 ${inputCls}`} placeholder="Notas (opcional)" value={measForm.notes} onChange={e=>setMeasForm(prev=>({...prev,notes:e.target.value}))}/>
+                        <button onClick={saveMeasurement} disabled={measSaving}
+                          className={`mt-3 w-full py-3 text-sm font-semibold ${primaryBtn}`}>
+                          {measSaving?"Guardando…":"Guardar medidas de hoy"}
+                        </button>
+                        {measurementLogs.length>0 && (
+                          <p className="mt-1.5 text-[11px] text-[#b3aa9b]">
+                            Último registro: {new Date(measurementLogs[measurementLogs.length-1].loggedAt).toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"})}
+                          </p>
+                        )}
+                      </article>
+
                       {/* Adherencia semanal */}
                       {portalClient.program && (()=>{
                         const weeks=portalClient.program!.weeks;
@@ -2993,6 +3087,27 @@ export default function RoutineGenerator() {
             <button onClick={()=>{clearInterval(restTimerRef.current!);setRestTimer(null);}}
               className="mt-1 rounded-xl border border-white/20 px-4 py-1.5 text-[11px] font-semibold text-white/60 hover:text-white">
               Saltar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Célébración de PR ── */}
+      {prAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={()=>setPrAlert(null)}>
+          <div className="w-full max-w-sm rounded-[24px] bg-[#17120d] p-8 text-center text-[#f4f1ea]" onClick={e=>e.stopPropagation()}>
+            <div className="text-6xl mb-3">🏆</div>
+            <h3 className="font-display text-[26px] font-semibold">¡Nuevo récord!</h3>
+            <p className="mt-2 text-[14px] text-[#b7ad9d]">{prAlert.name}</p>
+            <div className="mt-4 flex items-baseline justify-center gap-2">
+              <span className="font-display text-[48px] font-bold text-[#a87d49] leading-none">{prAlert.kg}</span>
+              <span className="text-[18px] text-[#9a9186]">kg</span>
+            </div>
+            {prAlert.prev>0 && (
+              <p className="mt-2 text-[13px] text-[#9a9186]">Antes: {prAlert.prev} kg · <span className="text-[#a87d49]">+{(prAlert.kg-prAlert.prev).toFixed(1)} kg</span></p>
+            )}
+            <button onClick={()=>setPrAlert(null)} className={`mt-6 w-full py-3 text-sm ${primaryBtn}`}>
+              ¡A seguir rompiendo! 💪
             </button>
           </div>
         </div>

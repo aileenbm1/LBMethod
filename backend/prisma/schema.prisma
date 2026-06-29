@@ -155,7 +155,8 @@ model User {
   weightLogs      WeightLog[]
   coachNotes      CoachNote[]
   sessionFeedback SessionFeedback[]
-  progressPhotos  ProgressPhoto[]
+  progressPhotos    ProgressPhoto[]
+  measurementLogs   MeasurementLog[]
 }
 
 model Exercise {
@@ -374,6 +375,25 @@ model SessionFeedback {
 
   @@unique([userId, weekNumber, dayIndex])
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Medidas corporales históricas
+// ---------------------------------------------------------------------------
+
+model MeasurementLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hipCm     Float?
+  waistCm   Float?
+  thighCm   Float?
+  armCm     Float?
+  chestCm   Float?
+  notes     String?
+  loggedAt  DateTime @default(now())
+
+  @@index([userId, loggedAt])
 }
 
 // ---------------------------------------------------------------------------
