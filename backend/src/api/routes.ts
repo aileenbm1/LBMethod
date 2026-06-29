@@ -437,6 +437,97 @@ export function buildRouter(service: RoutineService): Router {
     } catch (err) { return next(err); }
   });
 
+  // ── Peso corporal semanal ────────────────────────────────────────────────────
+  router.post("/usuario/:id/peso", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    const { weightKg, notes } = req.body as { weightKg: number; notes?: string };
+    if (!weightKg || isNaN(weightKg) || weightKg <= 0) return res.status(400).json({ error: "Peso inválido." });
+    try {
+      const log = await prisma.weightLog.create({ data: { userId: req.params.id, weightKg, notes } });
+      return res.status(201).json({ log });
+    } catch (err) { return next(err); }
+  });
+
+  router.get("/usuario/:id/peso", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const logs = await prisma.weightLog.findMany({
+        where: { userId: req.params.id },
+        orderBy: { loggedAt: "asc" },
+      });
+      return res.json({ logs });
+    } catch (err) { return next(err); }
+  });
+
+  // ── Notas del coach por sesión ────────────────────────────────────────────
+  router.post("/usuario/:id/coach-note", requireRole("coach"), async (req, res, next) => {
+    const { weekNumber, dayIndex, note } = req.body as { weekNumber: number; dayIndex: number; note: string };
+    if (!note?.trim()) return res.status(400).json({ error: "Nota vacía." });
+    try {
+      const record = await prisma.coachNote.upsert({
+        where: { userId_weekNumber_dayIndex: { userId: req.params.id, weekNumber, dayIndex } },
+        update: { note: note.trim() },
+        create: { userId: req.params.id, weekNumber, dayIndex, note: note.trim() },
+      });
+      return res.status(201).json({ note: record });
+    } catch (err) { return next(err); }
+  });
+
+  router.get("/usuario/:id/coach-notes", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const notes = await prisma.coachNote.findMany({ where: { userId: req.params.id }, orderBy: { weekNumber: "asc" } });
+      return res.json({ notes });
+    } catch (err) { return next(err); }
+  });
+
+  // ── Feedback post-sesión ──────────────────────────────────────────────────
+  router.post("/usuario/:id/feedback", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    const { weekNumber, dayIndex, feeling } = req.body as { weekNumber: number; dayIndex: number; feeling: string };
+    if (!["easy","good","hard"].includes(feeling)) return res.status(400).json({ error: "Feeling inválido." });
+    try {
+      const fb = await prisma.sessionFeedback.upsert({
+        where: { userId_weekNumber_dayIndex: { userId: req.params.id, weekNumber, dayIndex } },
+        update: { feeling },
+        create: { userId: req.params.id, weekNumber, dayIndex, feeling },
+      });
+      return res.status(201).json({ feedback: fb });
+    } catch (err) { return next(err); }
+  });
+
+  router.get("/usuario/:id/feedback", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const feedbacks = await prisma.sessionFeedback.findMany({ where: { userId: req.params.id } });
+      return res.json({ feedbacks });
+    } catch (err) { return next(err); }
+  });
+
+  // ── Dashboard del coach (alertas) ─────────────────────────────────────────
+  router.get("/dashboard", requireRole("coach"), async (_req, res, next) => {
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const users = await prisma.user.findMany({
+        select: {
+          id: true, name: true, goal: true, daysPerWeek: true,
+          exerciseLogs: { select: { loggedAt: true }, orderBy: { loggedAt: "desc" }, take: 1 },
+        },
+      });
+      const dashboard = users.map(u => {
+        const lastLog = u.exerciseLogs[0]?.loggedAt ?? null;
+        const inactive = lastLog ? lastLog < sevenDaysAgo : true;
+        return { id: u.id, name: u.name, goal: u.goal, daysPerWeek: u.daysPerWeek, lastSession: lastLog, inactive };
+      });
+      return res.json({ dashboard });
+    } catch (err) { return next(err); }
+  });
+
   router.patch("/exercise/:id/media", requireRole("coach"), async (req, res, next) => {
     const parsed = updateExerciseMediaSchema.safeParse(req.body);
     if (!parsed.success) {

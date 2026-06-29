@@ -621,6 +621,25 @@ export default function RoutineGenerator() {
   const [historyData, setHistoryData] = useState<ExerciseLogRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  /* --- Peso corporal --- */
+  const [weightLogs, setWeightLogs] = useState<{id:string;weightKg:number;notes?:string;loggedAt:string}[]>([]);
+  const [newWeight, setNewWeight] = useState("");
+  const [weightNote, setWeightNote] = useState("");
+  const [weightSaving, setWeightSaving] = useState(false);
+
+  /* --- Notas del coach --- */
+  const [coachNotes, setCoachNotes] = useState<Record<string,string>>({});
+  const [editingNote, setEditingNote] = useState<{key:string;text:string}|null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  /* --- Feedback post-sesión --- */
+  const [sessionFeedbacks, setSessionFeedbacks] = useState<Record<string,string>>({});
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+
+  /* --- Dashboard alertas --- */
+  const [dashboardData, setDashboardData] = useState<{id:string;name:string;goal:string;lastSession:string|null;inactive:boolean}[]>([]);
+  const [, setDashboardLoading] = useState(false);
+
   /* --- Chat (movido a FloatingChat — autocontenido) --- */
 
   /* --- Global state --- */
@@ -656,6 +675,7 @@ export default function RoutineGenerator() {
   useEffect(()=>{refreshClients().catch(e=>setError(e instanceof Error?e.message:"Error"));},[authSession]);
   useEffect(()=>{if(!authSession){sessionStorage.removeItem(SESSION_KEY);return;}sessionStorage.setItem(SESSION_KEY,JSON.stringify(authSession));},[authSession]);
   useEffect(()=>{if(!clients.some(c=>c.id===selectedClientId))setSelectedClientId(clients[0]?.id??"");},[clients]);
+  useEffect(()=>{if(selectedClientId&&authSession?.role==="coach")loadCoachNotes(selectedClientId);},[selectedClientId]);
 
   // Precargar GIFs cuando hay un programa disponible (portal cliente o step 3)
   useEffect(()=>{
@@ -673,7 +693,22 @@ export default function RoutineGenerator() {
       }, i*130);
     });
   },[flowProgram,selectedClientId]);
-  useEffect(()=>{if(authSession?.role==="client"&&authSession.clientId){setSelectedClientId(authSession.clientId);setActiveTab("portal");}},[authSession]);
+  useEffect(()=>{
+    if(authSession?.role==="client"&&authSession.clientId){
+      setSelectedClientId(authSession.clientId);
+      setActiveTab("portal");
+      loadWeightLogs(authSession.clientId);
+      // Cargar feedback previo
+      apiFetch(`/usuario/${authSession.clientId}/feedback`).then(r=>r.json()).then((d:any)=>{
+        if(d.feedbacks){const m:Record<string,string>={};for(const f of d.feedbacks)m[`${f.weekNumber}-${f.dayIndex}`]=f.feeling;setSessionFeedbacks(m);}
+      }).catch(()=>{});
+      // Cargar notas del coach
+      loadCoachNotes(authSession.clientId);
+    }
+    if(authSession?.role==="coach"){
+      loadDashboard();
+    }
+  },[authSession]);
   // Pre-llenar personalización cuando se selecciona cliente en Step 2
   useEffect(()=>{
     if(coachStep===2&&flowClient){
@@ -936,6 +971,68 @@ export default function RoutineGenerator() {
       setSessionComplete(true);
     }catch(e){setError(e instanceof Error?e.message:"Error al guardar sesión")}
     finally{setLogSaving(false);}
+  }
+
+  async function loadWeightLogs(clientId:string){
+    try{
+      const res=await apiFetch(`/usuario/${clientId}/peso`);
+      if(!res.ok)return;
+      const d=await res.json() as {logs:{id:string;weightKg:number;notes?:string;loggedAt:string}[]};
+      setWeightLogs(d.logs);
+    }catch{}
+  }
+
+  async function saveWeight(){
+    if(!portalClientId||!newWeight||isNaN(Number(newWeight)))return;
+    setWeightSaving(true);
+    try{
+      await apiFetch(`/usuario/${portalClientId}/peso`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({weightKg:Number(newWeight),notes:weightNote||undefined})});
+      setNewWeight("");setWeightNote("");
+      await loadWeightLogs(portalClientId);
+    }catch(e){setError(e instanceof Error?e.message:"Error al guardar peso")}
+    finally{setWeightSaving(false);}
+  }
+
+  async function loadCoachNotes(clientId:string){
+    try{
+      const res=await apiFetch(`/usuario/${clientId}/coach-notes`);
+      if(!res.ok)return;
+      const d=await res.json() as {notes:{weekNumber:number;dayIndex:number;note:string}[]};
+      const map:Record<string,string>={};
+      for(const n of d.notes) map[`${n.weekNumber}-${n.dayIndex}`]=n.note;
+      setCoachNotes(map);
+    }catch{}
+  }
+
+  async function saveCoachNote(clientId:string,weekNumber:number,dayIndex:number,note:string){
+    setNoteSaving(true);
+    try{
+      await apiFetch(`/usuario/${clientId}/coach-note`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({weekNumber,dayIndex,note})});
+      setCoachNotes(prev=>({...prev,[`${weekNumber}-${dayIndex}`]:note}));
+      setEditingNote(null);
+    }catch(e){setError(e instanceof Error?e.message:"Error al guardar nota")}
+    finally{setNoteSaving(false);}
+  }
+
+  async function saveFeedback(feeling:string,weekNumber:number,dayIndex:number){
+    if(!portalClientId)return;
+    setFeedbackSaving(true);
+    try{
+      await apiFetch(`/usuario/${portalClientId}/feedback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({weekNumber,dayIndex,feeling})});
+      setSessionFeedbacks(prev=>({...prev,[`${weekNumber}-${dayIndex}`]:feeling}));
+    }catch{}
+    finally{setFeedbackSaving(false);}
+  }
+
+  async function loadDashboard(){
+    setDashboardLoading(true);
+    try{
+      const res=await apiFetch("/dashboard");
+      if(!res.ok)return;
+      const d=await res.json() as {dashboard:{id:string;name:string;goal:string;lastSession:string|null;inactive:boolean}[]};
+      setDashboardData(d.dashboard);
+    }catch{}
+    finally{setDashboardLoading(false);}
   }
 
   async function loadHistory(exerciseName:string){
@@ -1816,7 +1913,20 @@ export default function RoutineGenerator() {
                   </span>
                 </button>
               );})}
-              {clients.length===0 && <div className="rounded-2xl border border-dashed border-[#dcd4c5] p-6 text-center"><p className="text-sm text-[#a39a8d]">Sin clientas aún.</p><button onClick={()=>setActiveTab("coach")} className={`mt-3 px-5 py-2.5 text-sm ${primaryBtn}`}>+ Agregar</button></div>}
+              {clients.length===0 && <div className="rounded-2xl border border-dashed border-[#dcd4c5] p-6 text-center"><p className="text-sm text-[#a39a8d]">Sin asesorados aún.</p><button onClick={()=>setActiveTab("coach")} className={`mt-3 px-5 py-2.5 text-sm ${primaryBtn}`}>+ Agregar</button></div>}
+
+              {/* Alertas de inactividad */}
+              {dashboardData.filter(d=>d.inactive).length>0 && (
+                <div className="rounded-[16px] border border-[#f5c6c6] bg-[#fff5f5] p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#c62828] mb-2">Sin entrenar +7 días</div>
+                  {dashboardData.filter(d=>d.inactive).map(d=>(
+                    <div key={d.id} className="flex items-center justify-between py-1.5">
+                      <span className="text-[13px] font-semibold">{d.name}</span>
+                      <span className="text-[11px] text-[#a39a8d]">{d.lastSession?`Última: ${new Date(d.lastSession).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}`:"Sin sesiones"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {selectedClient && (
@@ -1882,6 +1992,50 @@ export default function RoutineGenerator() {
                         ))}
                       </div>
                     )}
+                  </article>
+                )}
+
+                {/* Notas del coach por sesión */}
+                {selectedClient.program && (
+                  <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                    <h3 className="font-display text-[17px] font-semibold mb-4">Notas por sesión</h3>
+                    <p className="text-[12px] text-[#8c8377] mb-4">Deja feedback en cada día de entrenamiento. El asesorado lo verá en su historial.</p>
+                    <div className="flex flex-col gap-3">
+                      {selectedClient.program.weeks.flatMap(w=>w.days.map(d=>{
+                        const key=`${w.weekNumber}-${d.dayIndex}`;
+                        const existingNote=coachNotes[key]??"";
+                        const isEditing=editingNote?.key===key;
+                        return(
+                          <div key={key} className="rounded-[14px] border border-[#ece6db] p-3.5">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[12px] font-semibold">Sem {w.weekNumber} · Día {d.dayIndex+1} — {FOCUS_LABELS[d.focus]??d.focus}</span>
+                              {!isEditing && (
+                                <button onClick={()=>setEditingNote({key,text:existingNote})}
+                                  className="text-[11px] text-[#a87d49] hover:underline">
+                                  {existingNote?"Editar":"+ Nota"}
+                                </button>
+                              )}
+                            </div>
+                            {isEditing ? (
+                              <div className="flex flex-col gap-2">
+                                <textarea className={`${inputCls} min-h-[60px] resize-none text-[12px]`}
+                                  placeholder="Ej: Excelente técnica en hip thrust. Intenta +2.5kg la próxima semana."
+                                  value={editingNote.text} onChange={e=>setEditingNote({key,text:e.target.value})}/>
+                                <div className="flex gap-2">
+                                  <button onClick={()=>saveCoachNote(selectedClient.id,w.weekNumber,d.dayIndex,editingNote.text)} disabled={noteSaving}
+                                    className={`flex-1 py-2 text-[12px] ${primaryBtn}`}>{noteSaving?"Guardando…":"Guardar"}</button>
+                                  <button onClick={()=>setEditingNote(null)} className={`px-4 py-2 text-[12px] ${ghostBtn}`}>Cancelar</button>
+                                </div>
+                              </div>
+                            ) : existingNote ? (
+                              <p className="text-[12px] text-[#6b6358] italic">"{existingNote}"</p>
+                            ) : (
+                              <p className="text-[11px] text-[#c2b9aa]">Sin nota</p>
+                            )}
+                          </div>
+                        );
+                      }))}
+                    </div>
                   </article>
                 )}
 
@@ -2144,6 +2298,28 @@ export default function RoutineGenerator() {
                                 <h3 className="font-display text-[24px] font-semibold">¡Sesión completada!</h3>
                                 <p className="mt-2 text-[13px] text-[#b7ad9d]">Semana {logWeek} · Día {logDay+1} — {FOCUS_LABELS[currentDayData?.focus??""]??""}</p>
                                 <p className="mt-1 text-[11px] text-[#9a9186]">Tus datos quedaron guardados</p>
+
+                                {/* Feedback post-sesión */}
+                                {!sessionFeedbacks[`${logWeek}-${logDay}`] && (
+                                  <div className="mt-5">
+                                    <p className="text-[12px] text-[#b7ad9d] mb-3">¿Cómo te sentiste en esta sesión?</p>
+                                    <div className="flex justify-center gap-3">
+                                      {([["easy","😴","Muy fácil"],["good","💪","Perfecta"],["hard","🥵","Muy dura"]] as [string,string,string][]).map(([f,emoji,label])=>(
+                                        <button key={f} disabled={feedbackSaving} onClick={()=>saveFeedback(f,logWeek,logDay)}
+                                          className="flex flex-col items-center gap-1 rounded-xl border border-white/20 px-3 py-2 hover:border-[#a87d49] hover:bg-white/5 transition">
+                                          <span className="text-2xl">{emoji}</span>
+                                          <span className="text-[10px] text-[#b7ad9d]">{label}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {sessionFeedbacks[`${logWeek}-${logDay}`] && (
+                                  <p className="mt-4 text-[12px] text-[#9a9186]">
+                                    Feedback guardado {sessionFeedbacks[`${logWeek}-${logDay}`]==="easy"?"😴":sessionFeedbacks[`${logWeek}-${logDay}`]==="good"?"💪":"🥵"}
+                                  </p>
+                                )}
+
                                 <div className="mt-5 flex flex-col gap-2.5 items-center">
                                   <button onClick={()=>{
                                     if(nextDayInWeek) goToDay(logWeek,logDay+1);
@@ -2494,6 +2670,46 @@ export default function RoutineGenerator() {
                   {portalTab==="historial" && (
                     <div className="flex flex-col gap-4">
 
+                      {/* Registro de peso corporal */}
+                      <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
+                        <h3 className="font-display text-[17px] font-semibold mb-4">Peso corporal</h3>
+                        {weightLogs.length>0 && (()=>{
+                          const chartData=weightLogs.slice(-8).map(l=>({label:new Date(l.loggedAt).toLocaleDateString("es-MX",{day:"2-digit",month:"short"}),value:l.weightKg}));
+                          const first=weightLogs[0].weightKg;
+                          const last=weightLogs[weightLogs.length-1].weightKg;
+                          return(
+                            <div className="mb-4">
+                              <LineChart data={chartData} yUnit="kg"/>
+                              <div className="mt-2 grid grid-cols-3 gap-2">
+                                <div className="rounded-lg bg-[#faf8f4] p-2 text-center">
+                                  <div className="font-display text-[17px] font-semibold">{first}kg</div>
+                                  <div className="text-[9px] uppercase text-[#9a9186]">Inicio</div>
+                                </div>
+                                <div className="rounded-lg bg-[#faf8f4] p-2 text-center">
+                                  <div className="font-display text-[17px] font-semibold">{last}kg</div>
+                                  <div className="text-[9px] uppercase text-[#9a9186]">Actual</div>
+                                </div>
+                                <div className="rounded-lg bg-[#faf8f4] p-2 text-center">
+                                  <div className={`font-display text-[17px] font-semibold ${last-first<=0?"text-[#2e7d32]":"text-[#a87d49]"}`}>{last-first>0?"+":""}{(last-first).toFixed(1)}kg</div>
+                                  <div className="text-[9px] uppercase text-[#9a9186]">Cambio</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <div className="flex gap-2">
+                          <input type="number" inputMode="decimal" step={0.1} min={30} max={300}
+                            className={`flex-1 ${inputCls}`} placeholder="Tu peso hoy (kg)" value={newWeight} onChange={e=>setNewWeight(e.target.value)}/>
+                          <button onClick={saveWeight} disabled={weightSaving||!newWeight}
+                            className={`flex-none px-4 py-2 text-sm font-semibold ${primaryBtn}`}>
+                            {weightSaving?"…":"Guardar"}
+                          </button>
+                        </div>
+                        {weightLogs.length>0 && (
+                          <p className="mt-1.5 text-[11px] text-[#b3aa9b]">Último registro: {weightLogs[weightLogs.length-1].weightKg}kg</p>
+                        )}
+                      </article>
+
                       {/* Adherencia semanal */}
                       {portalClient.program && (()=>{
                         const weeks=portalClient.program!.weeks;
@@ -2562,7 +2778,7 @@ export default function RoutineGenerator() {
                         })()}
                       </article>
 
-                      {/* Registros detallados */}
+                      {/* Registros detallados + notas del coach */}
                       {historyData.length>0 && (
                         <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
                           <h4 className="font-display text-[15px] font-semibold mb-3">{tx(historyExercise)} — detalle</h4>
@@ -2570,13 +2786,26 @@ export default function RoutineGenerator() {
                             {historyData.map(log=>{
                               const maxKg=Math.max(...log.setsData.map(s=>s.weightKg),0);
                               const completed=log.setsData.filter(s=>s.completed).length;
+                              const coachNote=coachNotes[`${log.weekNumber}-${log.dayIndex}`];
+                              const feedback=sessionFeedbacks[`${log.weekNumber}-${log.dayIndex}`];
                               return(
-                                <div key={log.id} className="flex items-center justify-between rounded-xl border border-[#ece6db] px-4 py-2.5">
-                                  <span className="text-[13px] font-semibold">Sem {log.weekNumber} · Día {log.dayIndex+1}</span>
-                                  <div className="flex items-center gap-3 text-right">
-                                    <span className="text-[13px] font-semibold text-[#a87d49]">{maxKg}kg</span>
-                                    <span className="text-[11px] text-[#a39a8d]">{completed}/{log.setsData.length} series</span>
+                                <div key={log.id} className="rounded-xl border border-[#ece6db] px-4 py-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[13px] font-semibold">Sem {log.weekNumber} · Día {log.dayIndex+1}</span>
+                                      {feedback && <span className="text-base">{feedback==="easy"?"😴":feedback==="good"?"💪":"🥵"}</span>}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-[13px] font-semibold text-[#a87d49]">{maxKg}kg</span>
+                                      <span className="text-[11px] text-[#a39a8d]">{completed}/{log.setsData.length} series</span>
+                                    </div>
                                   </div>
+                                  {coachNote && (
+                                    <div className="mt-1.5 rounded-lg bg-[#fdf8f0] border border-[#ede0c4] px-3 py-1.5">
+                                      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#a87d49]">Coach: </span>
+                                      <span className="text-[12px] text-[#7a6a52]">{coachNote}</span>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
