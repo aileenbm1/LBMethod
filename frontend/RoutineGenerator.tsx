@@ -546,9 +546,9 @@ function downloadPdf(client:Client, program:Program) {
    =================================================================== */
 export default function RoutineGenerator() {
   /* --- Auth --- */
-  const [authRole, setAuthRole] = useState<AuthRole>(
-    ()=>window.location.pathname.startsWith("/asesorado")?"client":"coach"
-  );
+  const isAsesoradoRoute = window.location.pathname.startsWith("/asesorado");
+  const [authRole, setAuthRole] = useState<AuthRole>(isAsesoradoRoute?"client":"coach");
+  void setAuthRole; // usado en login de coach cuando expira sesión
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginIdentifier, setLoginIdentifier] = useState("");
@@ -1451,8 +1451,12 @@ export default function RoutineGenerator() {
 
       <div className="flex flex-1 basis-[420px] items-center justify-center px-6 py-10 sm:px-8">
         <div className="lb-enter w-full max-w-[392px]">
-          <h2 className="font-display text-[34px] font-semibold tracking-tight text-[#17120d]">Inicio de sesión</h2>
-          <p className="mt-2 text-sm text-[#8c8377]">Bienvenida de vuelta.</p>
+          <h2 className="font-display text-[34px] font-semibold tracking-tight text-[#17120d]">
+            {isAsesoradoRoute?"Mi entrenamiento":"Coach Studio"}
+          </h2>
+          <p className="mt-2 text-sm text-[#8c8377]">
+            {isAsesoradoRoute?"Ingresa tu PIN para ver tu rutina.":"Acceso exclusivo para coaches."}
+          </p>
 
           {/* Pantalla 2FA */}
           {twoFactorPending && (
@@ -1531,12 +1535,11 @@ export default function RoutineGenerator() {
           )}
 
           {/* Cambio de modo — discreto */}
-          {!twoFactorPending && !loginLockedUntil && (
+          {/* Solo mostrar el toggle si NO estamos en una ruta fija */}
+          {!twoFactorPending && !loginLockedUntil && !isAsesoradoRoute && authRole==="coach" && (
             <p className="mt-5 text-center text-[12px] text-[#a39a8d]">
-              {authRole==="coach"
-                ? <><span>¿Eres asesorado? </span><button onClick={()=>{setAuthRole("client");setError(null);setLoginLockedUntil(null);}} className="text-[#a87d49] hover:underline">Entra con tu PIN</button></>
-                : <button onClick={()=>{setAuthRole("coach");setError(null);setLoginLockedUntil(null);}} className="text-[#a87d49] hover:underline">← Volver</button>
-              }
+              <span>¿Eres asesorado? </span>
+              <a href="/asesorado" className="text-[#a87d49] hover:underline">Entra aquí</a>
             </p>
           )}
         </div>
