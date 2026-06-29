@@ -1177,7 +1177,7 @@ export default function RoutineGenerator() {
   }
 
   function copyInviteLink(token:string){
-    const url=`${window.location.origin}/registro/${token}`;
+    const url=`https://lb-method.vercel.app/registro/${token}`;
     navigator.clipboard.writeText(url).then(()=>{setCopiedInvite(token);setTimeout(()=>setCopiedInvite(null),2500);});
   }
 
