@@ -8,7 +8,7 @@ const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize
 import { PrismaClient } from "@prisma/client";
 import type { RoutineService } from "./RoutineService";
 import {
-  clearasesoradattempts, clearCoachAttempts, isClientLocked, isCoachLocked,
+  clearClientAttempts, clearCoachAttempts, isClientLocked, isCoachLocked,
   isCoach2FAPending, recordClientFailedAttempt, recordCoachFailedAttempt,
   resendCoachCode, verifyCoachCode,
 } from "./TwoFactorService";
@@ -185,7 +185,7 @@ export function buildRouter(service: RoutineService): Router {
       if (!isHashed) {
         await service.setClientPin(usuario.id, enteredPin);
       }
-      clearasesoradattempts(identifier);
+      clearClientAttempts(identifier);
       const claims = {
         role: "client" as const,
         clientId: usuario.id,
@@ -270,7 +270,7 @@ export function buildRouter(service: RoutineService): Router {
       return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
     }
     try {
-      const { client: created, generatedPin } = await service.createClient(parsed.data);
+      const { client: created, generatedPin } = await service.createClient(parsed.data as any);
       res.status(201).json({ usuario: created, generatedPin });
     } catch (err) {
       next(err);
@@ -353,8 +353,8 @@ export function buildRouter(service: RoutineService): Router {
           take: 6, // últimas 6 sesiones
         });
         if (feedbacks.length >= 3) {
-          const scores = feedbacks.map(f => f.feeling === "easy" ? 1 : f.feeling === "good" ? 0 : -1);
-          const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
+          const scores: number[] = feedbacks.map(f => f.feeling === "easy" ? 1 : f.feeling === "good" ? 0 : -1);
+          const avg = scores.reduce((s: number, v: number) => s + v, 0) / scores.length;
           if (avg <= -0.4) {
             volumeBias = 0.85; // mayoría "duro" → -15% volumen
             feedbackMessage = "Volumen reducido 15% basado en feedback: sesiones reportadas como difíciles.";
@@ -608,7 +608,7 @@ export function buildRouter(service: RoutineService): Router {
       const parsed = createClientSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
 
-      const { client, generatedPin } = await service.createClient(parsed.data);
+      const { client, generatedPin } = await service.createClient(parsed.data as any);
 
       // Marcar invitación como usada
       await prisma.invite.update({
