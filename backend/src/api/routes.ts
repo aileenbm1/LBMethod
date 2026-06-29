@@ -529,6 +529,81 @@ export function buildRouter(service: RoutineService): Router {
     } catch (err) { return next(err); }
   });
 
+  // ── Check-in semanal ──────────────────────────────────────────────────────
+  router.post("/usuario/:id/checkin", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    const { weekNumber, energy, sleep, stress, notes } = req.body as { weekNumber:number; energy:number; sleep:number; stress:number; notes?:string };
+    if (!weekNumber || !energy || !sleep || !stress) return res.status(400).json({ error: "Datos incompletos." });
+    try {
+      const ci = await prisma.weeklyCheckIn.upsert({
+        where: { userId_weekNumber: { userId: req.params.id, weekNumber } },
+        update: { energy, sleep, stress, notes },
+        create: { userId: req.params.id, weekNumber, energy, sleep, stress, notes },
+      });
+      return res.status(201).json({ checkIn: ci });
+    } catch (err) { return next(err); }
+  });
+
+  router.get("/usuario/:id/checkins", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const checkIns = await prisma.weeklyCheckIn.findMany({ where: { userId: req.params.id }, orderBy: { weekNumber: "asc" } });
+      return res.json({ checkIns });
+    } catch (err) { return next(err); }
+  });
+
+  // ── Templates de rutinas ──────────────────────────────────────────────────
+  router.post("/templates", requireRole("coach"), async (req, res, next) => {
+    const { name, goal, level, daysPerWeek, totalWeeks, payload } = req.body as {
+      name:string; goal:string; level:string; daysPerWeek:number; totalWeeks:number; payload:unknown;
+    };
+    if (!name?.trim() || !payload) return res.status(400).json({ error: "Nombre y programa requeridos." });
+    try {
+      const template = await prisma.workout.create({
+        data: { name: name.trim(), goal: goal as any, level: level as any, daysPerWeek, totalWeeks, payload: payload as any },
+      });
+      return res.status(201).json({ template });
+    } catch (err) { return next(err); }
+  });
+
+  router.get("/templates", requireRole("coach"), async (_req, res, next) => {
+    try {
+      const templates = await prisma.workout.findMany({ orderBy: { createdAt: "desc" } });
+      return res.json({ templates });
+    } catch (err) { return next(err); }
+  });
+
+  router.delete("/templates/:id", requireRole("coach"), async (req, res, next) => {
+    try {
+      await prisma.workout.delete({ where: { id: req.params.id } });
+      return res.json({ ok: true });
+    } catch (err) { return next(err); }
+  });
+
+  router.post("/templates/:id/aplicar", requireRole("coach"), async (req, res, next) => {
+    const { clientId } = req.body as { clientId: string };
+    if (!clientId) return res.status(400).json({ error: "clientId requerido." });
+    try {
+      const template = await prisma.workout.findUnique({ where: { id: req.params.id } });
+      if (!template) return res.status(404).json({ error: "Template no encontrado." });
+      const payload = template.payload as Record<string, unknown>;
+      const program = payload.program ?? payload; // el payload puede ser el program directamente
+      const routineId = `tpl-${Date.now()}`;
+      const newPayload = { routineId, program, progress: [], clientId, usedSignatures: [] };
+      // Guardar como rutina activa del asesorado
+      const activeName = `client:${clientId}:active`;
+      const existing = await prisma.workout.findFirst({ where: { name: activeName }, orderBy: { createdAt: "desc" } });
+      if (existing) {
+        await prisma.workout.update({ where: { id: existing.id }, data: { payload: newPayload as any } });
+      } else {
+        await prisma.workout.create({ data: { name: activeName, goal: template.goal, level: template.level, daysPerWeek: template.daysPerWeek, totalWeeks: template.totalWeeks, payload: newPayload as any } });
+      }
+      return res.status(201).json({ ok: true, program });
+    } catch (err) { return next(err); }
+  });
+
   // ── Medidas corporales ────────────────────────────────────────────────────
   router.post("/usuario/:id/medidas", requireAuth, async (req, res, next) => {
     const auth = (req as AuthedRequest).auth;

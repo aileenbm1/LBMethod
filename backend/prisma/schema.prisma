@@ -157,6 +157,7 @@ model User {
   sessionFeedback SessionFeedback[]
   progressPhotos    ProgressPhoto[]
   measurementLogs   MeasurementLog[]
+  checkIns          WeeklyCheckIn[]
 }
 
 model Exercise {
@@ -374,6 +375,25 @@ model SessionFeedback {
   createdAt  DateTime @default(now())
 
   @@unique([userId, weekNumber, dayIndex])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Check-in semanal del asesorado
+// ---------------------------------------------------------------------------
+
+model WeeklyCheckIn {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekNumber Int
+  energy     Int      // 1-5 (1=sin energía, 5=muy bien)
+  sleep      Int      // 1-5 (1=pésimo, 5=excelente)
+  stress     Int      // 1-5 (1=tranquila, 5=muy estresada)
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, weekNumber])
   @@index([userId])
 }
 

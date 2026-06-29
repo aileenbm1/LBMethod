@@ -647,6 +647,23 @@ export default function RoutineGenerator() {
   /* --- Récord personal (PR) --- */
   const [prAlert, setPrAlert] = useState<{name:string;kg:number;prev:number}|null>(null);
 
+  /* --- Check-in semanal --- */
+  type CheckIn = {id:string;weekNumber:number;energy:number;sleep:number;stress:number;notes?:string;createdAt:string};
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [checkInForm, setCheckInForm] = useState({energy:3,sleep:3,stress:3,notes:""});
+  const [checkInSaving, setCheckInSaving] = useState(false);
+  const [showCheckIn, setShowCheckIn] = useState(false);
+
+  /* --- Templates de rutinas --- */
+  type Template = {id:string;name:string;goal:string;level:string;daysPerWeek:number;totalWeeks:number;createdAt:string};
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState<Template|null>(null);
+  const [applyClientId, setApplyClientId] = useState("");
+
   /* --- Medidas corporales --- */
   type MeasLog = {id:string;hipCm?:number;waistCm?:number;thighCm?:number;armCm?:number;chestCm?:number;notes?:string;loggedAt:string};
   const [measurementLogs, setMeasurementLogs] = useState<MeasLog[]>([]);
@@ -694,7 +711,12 @@ export default function RoutineGenerator() {
   useEffect(()=>{refreshClients().catch(e=>setError(e instanceof Error?e.message:"Error"));},[authSession]);
   useEffect(()=>{if(!authSession){sessionStorage.removeItem(SESSION_KEY);return;}sessionStorage.setItem(SESSION_KEY,JSON.stringify(authSession));},[authSession]);
   useEffect(()=>{if(!clients.some(c=>c.id===selectedClientId))setSelectedClientId(clients[0]?.id??"");},[clients]);
-  useEffect(()=>{if(selectedClientId&&authSession?.role==="coach")loadCoachNotes(selectedClientId);},[selectedClientId]);
+  useEffect(()=>{
+    if(selectedClientId&&authSession?.role==="coach"){
+      loadCoachNotes(selectedClientId);
+      loadCheckIns(selectedClientId);
+    }
+  },[selectedClientId]);
 
   // Precargar GIFs cuando hay un programa disponible (portal cliente o step 3)
   useEffect(()=>{
@@ -719,6 +741,7 @@ export default function RoutineGenerator() {
       loadWeightLogs(authSession.clientId);
       loadProgressPhotos(authSession.clientId);
       loadMeasurements(authSession.clientId);
+      loadCheckIns(authSession.clientId);
       // Cargar feedback previo
       apiFetch(`/usuario/${authSession.clientId}/feedback`).then(r=>r.json()).then((d:any)=>{
         if(d.feedbacks){const m:Record<string,string>={};for(const f of d.feedbacks)m[`${f.weekNumber}-${f.dayIndex}`]=f.feeling;setSessionFeedbacks(m);}
@@ -728,6 +751,7 @@ export default function RoutineGenerator() {
     }
     if(authSession?.role==="coach"){
       loadDashboard();
+      loadTemplates();
     }
   },[authSession]);
   // Pre-llenar personalización cuando se selecciona cliente en Step 2
@@ -1045,6 +1069,66 @@ export default function RoutineGenerator() {
       setSessionFeedbacks(prev=>({...prev,[`${weekNumber}-${dayIndex}`]:feeling}));
     }catch{}
     finally{setFeedbackSaving(false);}
+  }
+
+  async function loadCheckIns(clientId:string){
+    try{
+      const res=await apiFetch(`/usuario/${clientId}/checkins`);
+      if(!res.ok)return;
+      const d=await res.json() as {checkIns:CheckIn[]};
+      setCheckIns(d.checkIns);
+    }catch{}
+  }
+
+  async function saveCheckIn(weekNumber:number){
+    if(!portalClientId)return;
+    setCheckInSaving(true);
+    try{
+      await apiFetch(`/usuario/${portalClientId}/checkin`,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({weekNumber,...checkInForm})});
+      setShowCheckIn(false);
+      await loadCheckIns(portalClientId);
+    }catch(e){setError(e instanceof Error?e.message:"Error")}
+    finally{setCheckInSaving(false);}
+  }
+
+  async function loadTemplates(){
+    try{
+      const res=await apiFetch("/templates");
+      if(!res.ok)return;
+      const d=await res.json() as {templates:Template[]};
+      setTemplates(d.templates);
+    }catch{}
+  }
+
+  async function saveAsTemplate(){
+    if(!flowProgram||!templateName.trim())return;
+    setTemplateSaving(true);
+    try{
+      await apiFetch("/templates",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name:templateName.trim(),goal:flowProgram.goal,level:flowProgram.level,daysPerWeek:flowProgram.daysPerWeek,totalWeeks:flowProgram.weeks.length,payload:flowProgram})});
+      setTemplateName("");setShowTemplateModal(false);
+      await loadTemplates();
+    }catch(e){setError(e instanceof Error?e.message:"Error al guardar template")}
+    finally{setTemplateSaving(false);}
+  }
+
+  async function applyTemplate(){
+    if(!applyingTemplate||!applyClientId)return;
+    setTemplateSaving(true);
+    try{
+      await apiFetch(`/templates/${applyingTemplate.id}/aplicar`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({clientId:applyClientId})});
+      setShowApplyModal(false);setApplyingTemplate(null);setApplyClientId("");
+      await refreshClients();
+    }catch(e){setError(e instanceof Error?e.message:"Error al aplicar template")}
+    finally{setTemplateSaving(false);}
+  }
+
+  async function deleteTemplate(id:string){
+    try{
+      await apiFetch(`/templates/${id}`,{method:"DELETE"});
+      setTemplates(prev=>prev.filter(t=>t.id!==id));
+    }catch{}
   }
 
   async function loadMeasurements(clientId:string){
@@ -1895,6 +1979,7 @@ export default function RoutineGenerator() {
                 <ProgramView program={flowProgram} onShowExercise={setExerciseModal} gifMap={gifMap}/>
                 <div className="flex gap-3">
                   <button onClick={()=>setCoachStep(2)} className={`px-5 py-3.5 text-sm ${ghostBtn}`}>← Regenerar</button>
+                  <button onClick={()=>setShowTemplateModal(true)} className={`px-4 py-3.5 text-sm ${ghostBtn}`}>📋 Guardar template</button>
                   <button onClick={()=>setCoachStep(4)} className={`flex-1 py-3.5 text-[15px] ${primaryBtn}`}>Continuar → Acceso asesorado</button>
                 </div>
               </div>
@@ -2093,6 +2178,57 @@ export default function RoutineGenerator() {
                         ))}
                       </div>
                     )}
+                  </article>
+                )}
+
+                {/* Check-ins del asesorado */}
+                {selectedClient.program && (() => {
+                  const clientCheckIns = checkIns; // loaded when coach selects client
+                  if(clientCheckIns.length===0) return null;
+                  return (
+                    <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                      <h3 className="font-display text-[17px] font-semibold mb-4">Check-ins semanales</h3>
+                      <div className="flex flex-col gap-2">
+                        {clientCheckIns.slice().reverse().map(ci=>(
+                          <div key={ci.id} className="rounded-[14px] border border-[#ece6db] px-4 py-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[13px] font-semibold">Semana {ci.weekNumber}</span>
+                              <span className="text-[11px] text-[#a39a8d]">{fdt(ci.createdAt)}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {([["⚡ Energía",ci.energy],["😴 Sueño",ci.sleep],["🧠 Estrés",ci.stress]] as [string,number][]).map(([l,v])=>(
+                                <div key={l} className="rounded-lg bg-[#faf8f4] p-2 text-center">
+                                  <div className="text-[11px] text-[#8c8377]">{l}</div>
+                                  <div className="font-display text-[18px] font-semibold text-[#a87d49]">{v}/5</div>
+                                </div>
+                              ))}
+                            </div>
+                            {ci.notes && <p className="mt-2 text-[12px] text-[#8c8377] italic">"{ci.notes}"</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })()}
+
+                {/* Templates — acceso rápido */}
+                {templates.length>0 && (
+                  <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                    <h3 className="font-display text-[17px] font-semibold mb-4">Templates de rutinas</h3>
+                    <div className="flex flex-col gap-2">
+                      {templates.map(t=>(
+                        <div key={t.id} className="flex items-center justify-between rounded-[14px] border border-[#ece6db] px-4 py-3">
+                          <div>
+                            <div className="text-[13px] font-semibold">{t.name}</div>
+                            <div className="text-[11px] text-[#a39a8d]">{GOAL_LABELS[t.goal as Goal]??t.goal} · {t.level} · {t.daysPerWeek}d · {t.totalWeeks} sem</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={()=>{setApplyingTemplate(t);setShowApplyModal(true);}} className={`px-3 py-1.5 text-[12px] ${primaryBtn}`}>Aplicar</button>
+                            <button onClick={()=>deleteTemplate(t.id)} className="px-2.5 py-1.5 text-[12px] text-[#c62828] hover:bg-[#fde8e8] rounded-xl transition">✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </article>
                 )}
 
@@ -2323,6 +2459,13 @@ export default function RoutineGenerator() {
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a87d49]">Plan activo</div>
                       <h2 className="font-display mt-1 text-[28px] font-semibold">{portalClient.name}</h2>
                       <p className="mt-0.5 text-[12px] text-[#b7ad9d]">{GOAL_LABELS[portalClient.goal]} · {portalClient.daysPerWeek} días/sem</p>
+                      {/* Check-in semanal */}
+                      {authSession?.role==="client" && (
+                        <button onClick={()=>setShowCheckIn(true)}
+                          className="mt-2 rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white/70 hover:text-white hover:border-white/40 transition">
+                          📋 Check-in semanal
+                        </button>
+                      )}
                     </div>
                     <div className="text-center">
                       <div className="font-display text-[48px] font-semibold leading-none">{adherence(portalClient)}%</div>
@@ -3087,6 +3230,79 @@ export default function RoutineGenerator() {
             <button onClick={()=>{clearInterval(restTimerRef.current!);setRestTimer(null);}}
               className="mt-1 rounded-xl border border-white/20 px-4 py-1.5 text-[11px] font-semibold text-white/60 hover:text-white">
               Saltar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Check-in semanal ── */}
+      {showCheckIn && portalClientId && (()=>{
+        const portalC=clients.find(c=>c.id===portalClientId);
+        const currentWeek=portalC?.program?.weeks.find((_,i)=>i===logWeek-1)?.weekNumber??logWeek;
+        const existing=checkIns.find(c=>c.weekNumber===currentWeek);
+        return(
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4" onClick={()=>setShowCheckIn(false)}>
+            <div className="w-full max-w-sm rounded-[24px] bg-white p-6" onClick={e=>e.stopPropagation()}>
+              <h3 className="font-display text-[20px] font-semibold">Check-in Semana {currentWeek}</h3>
+              <p className="mt-1 text-[12px] text-[#8c8377]">¿Cómo vas esta semana? Tu coach lo verá.</p>
+              {([
+                ["energy","⚡ Energía",checkInForm.energy],
+                ["sleep","😴 Sueño",checkInForm.sleep],
+                ["stress","🧠 Estrés (1=tranquila)",checkInForm.stress],
+              ] as [string,string,number][]).map(([key,label,val])=>(
+                <div key={key} className="mt-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[13px] font-semibold">{label}</span>
+                    <span className="text-[13px] font-bold text-[#a87d49]">{val}/5</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {[1,2,3,4,5].map(n=>(
+                      <button key={n} onClick={()=>setCheckInForm(prev=>({...prev,[key]:n}))}
+                        className={`flex-1 rounded-xl py-2.5 text-[13px] font-bold transition ${val===n?"bg-[#a87d49] text-white":"bg-[#faf8f4] text-[#8c8377] hover:bg-[#f0e7d8]"}`}>{n}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <textarea className={`mt-4 ${inputCls} min-h-[60px] resize-none text-[13px]`}
+                placeholder="Nota opcional: cómo te has sentido, algo que quieras comentar…"
+                value={checkInForm.notes} onChange={e=>setCheckInForm(prev=>({...prev,notes:e.target.value}))}/>
+              {existing && <p className="mt-2 text-[11px] text-[#a87d49]">Ya tienes check-in esta semana. Guardar sobreescribirá.</p>}
+              <button onClick={()=>saveCheckIn(currentWeek)} disabled={checkInSaving} className={`mt-4 w-full py-3 text-sm ${primaryBtn}`}>
+                {checkInSaving?"Guardando…":"Enviar check-in"}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Modal Guardar Template ── */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={()=>setShowTemplateModal(false)}>
+          <div className="w-full max-w-sm rounded-[24px] bg-white p-6" onClick={e=>e.stopPropagation()}>
+            <h3 className="font-display text-[20px] font-semibold mb-1">Guardar como template</h3>
+            <p className="text-[12px] text-[#8c8377] mb-4">Podrás aplicar este programa a otros asesorados con un clic.</p>
+            <label className="block"><span className={labelCls}>Nombre del template</span>
+              <input className={inputCls} placeholder="Ej. PPL Principiante 4 días" value={templateName} onChange={e=>setTemplateName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveAsTemplate()}/>
+            </label>
+            <button onClick={saveAsTemplate} disabled={templateSaving||!templateName.trim()} className={`mt-4 w-full py-3 text-sm ${primaryBtn}`}>
+              {templateSaving?"Guardando…":"Guardar template"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Aplicar Template ── */}
+      {showApplyModal && applyingTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={()=>{setShowApplyModal(false);setApplyingTemplate(null);}}>
+          <div className="w-full max-w-sm rounded-[24px] bg-white p-6" onClick={e=>e.stopPropagation()}>
+            <h3 className="font-display text-[20px] font-semibold mb-1">Aplicar: {applyingTemplate.name}</h3>
+            <p className="text-[12px] text-[#8c8377] mb-4">Selecciona el asesorado que recibirá este programa.</p>
+            <select className={inputCls} value={applyClientId} onChange={e=>setApplyClientId(e.target.value)}>
+              <option value="">— selecciona asesorado —</option>
+              {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button onClick={applyTemplate} disabled={templateSaving||!applyClientId} className={`mt-4 w-full py-3 text-sm ${primaryBtn}`}>
+              {templateSaving?"Aplicando…":"Aplicar programa"}
             </button>
           </div>
         </div>
