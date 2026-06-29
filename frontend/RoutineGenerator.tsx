@@ -2429,17 +2429,20 @@ export default function RoutineGenerator() {
                 </button>
               </div>
 
+              {/* Formulario nueva invitación — solo al abrir */}
               {showInvitePanel && (
-                <div className="flex flex-col gap-3 border-t border-[#f0eae0] pt-4">
-                  <div className="flex gap-2">
-                    <input className={`flex-1 ${inputCls}`} placeholder="Para quién es (opcional): Ana García" value={inviteNote} onChange={e=>setInviteNote(e.target.value)} onKeyDown={e=>e.key==="Enter"&&generateInvite()}/>
-                    <button onClick={generateInvite} disabled={inviteGenerating} className={`flex-none px-5 py-2 text-sm font-semibold ${primaryBtn}`}>
-                      {inviteGenerating?"Generando…":"Generar link"}
-                    </button>
-                  </div>
+                <div className="flex gap-2 border-t border-[#f0eae0] pt-4">
+                  <input className={`flex-1 ${inputCls}`} placeholder="Para quién es (opcional): Ana García" value={inviteNote} onChange={e=>setInviteNote(e.target.value)} onKeyDown={e=>e.key==="Enter"&&generateInvite()}/>
+                  <button onClick={generateInvite} disabled={inviteGenerating} className={`flex-none px-5 py-2 text-sm font-semibold ${primaryBtn}`}>
+                    {inviteGenerating?"Generando…":"Generar link"}
+                  </button>
+                </div>
+              )}
 
-                  {invites.length===0 && <p className="text-[12px] text-[#a39a8d] text-center py-2">Sin invitaciones aún.</p>}
-
+              {/* Lista de invitaciones — SIEMPRE visible */}
+              {invites.length===0
+                ? <p className="text-[12px] text-[#a39a8d] text-center py-2">Sin invitaciones. Genera una con el botón de arriba.</p>
+                : <div className="flex flex-col gap-2 mt-2">
                   {invites.map(inv=>{
                     const used=!!inv.usedAt;
                     const expired=!used&&new Date(inv.expiresAt)<new Date();
@@ -2470,7 +2473,7 @@ export default function RoutineGenerator() {
                     );
                   })}
                 </div>
-              )}
+              }
             </div>
 
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,0.8fr)_1.4fr]">
@@ -2489,59 +2492,6 @@ export default function RoutineGenerator() {
                 </button>
               );})}
               {clients.length===0 && <div className="rounded-2xl border border-dashed border-[#dcd4c5] p-6 text-center"><p className="text-sm text-[#a39a8d]">Sin asesorados aún.</p><button onClick={()=>setActiveTab("coach")} className={`mt-3 px-5 py-2.5 text-sm ${primaryBtn}`}>+ Agregar</button></div>}
-
-              {/* Botón generar invitación */}
-              <button onClick={()=>setShowInvitePanel(!showInvitePanel)}
-                className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-left transition ${showInvitePanel?"border-[#a87d49] bg-[#fdfbf7]":"border-[#e7e1d6] bg-white hover:border-[#d8cdb8]"}`}>
-                <span className="text-lg">🔗</span>
-                <div>
-                  <div className="text-[13px] font-semibold">Invitaciones de registro</div>
-                  <div className="text-[11px] text-[#a39a8d]">{invites.filter(i=>!i.usedAt&&new Date(i.expiresAt)>new Date()).length} activas</div>
-                </div>
-              </button>
-
-              {showInvitePanel && (
-                <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-5 flex flex-col gap-3">
-                  <div className="flex gap-2">
-                    <input className={`flex-1 ${inputCls}`} placeholder="Nota: para quién es (opcional)" value={inviteNote} onChange={e=>setInviteNote(e.target.value)}/>
-                    <button onClick={generateInvite} disabled={inviteGenerating} className={`flex-none px-4 py-2 text-sm ${primaryBtn}`}>
-                      {inviteGenerating?"…":"+ Generar"}
-                    </button>
-                  </div>
-                  {invites.length===0 && <p className="text-[12px] text-[#a39a8d] text-center py-2">Sin invitaciones aún.</p>}
-                  {invites.map(inv=>{
-                    const used=!!inv.usedAt;
-                    const expired=!used&&new Date(inv.expiresAt)<new Date();
-                    const active=!used&&!expired;
-                    return(
-                      <div key={inv.id} className={`rounded-[14px] border px-4 py-3 ${active?"border-[#e7e1d6]":used?"border-[#d4edd4] bg-[#f6fff6]":"border-[#ece6db] bg-[#fafaf9]"}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            {inv.note && <div className="text-[13px] font-semibold truncate">{inv.note}</div>}
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${active?"bg-[#f0e7d8] text-[#8f6a3c]":used?"bg-[#d4edd4] text-[#2e7d32]":"bg-[#ece6db] text-[#9a9186]"}`}>
-                                {active?"Activa":used?"Usada":"Expirada"}
-                              </span>
-                              {active && <span className="text-[10px] text-[#a39a8d]">Expira {new Date(inv.expiresAt).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5 flex-none">
-                            {active && (
-                              <button onClick={()=>copyInviteLink(inv.token)}
-                                className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${copiedInvite===inv.token?"bg-[#a87d49] text-white":"border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49]"}`}>
-                                {copiedInvite===inv.token?"✓ Copiado":"Copiar link"}
-                              </button>
-                            )}
-                            {!used && (
-                              <button onClick={()=>revokeInvite(inv.id)} className="rounded-xl px-2 py-1.5 text-[11px] text-[#c62828] hover:bg-[#fde8e8]">✕</button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
 
               {/* Alertas de inactividad */}
               {dashboardData.filter(d=>d.inactive).length>0 && (
