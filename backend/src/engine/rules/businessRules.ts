@@ -182,4 +182,5 @@ export const GOAL_LOWER_BODY_BIAS: Record<Goal, number> = {
   body_recomposition: 0.65,
   fat_loss: 0.6,
   muscle_gain: 0.55,
+  general_health: 0.5,  // 50/50 cuerpo completo
 };

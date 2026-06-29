@@ -11,7 +11,8 @@ export type Goal =
   | "lower_body_focus"
   | "fat_loss"
   | "body_recomposition"
-  | "muscle_gain";
+  | "muscle_gain"
+  | "general_health";
 
 export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 

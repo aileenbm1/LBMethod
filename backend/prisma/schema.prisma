@@ -22,6 +22,7 @@ enum Goal {
   fat_loss
   body_recomposition
   muscle_gain
+  general_health
 }
 
 enum ExperienceLevel {

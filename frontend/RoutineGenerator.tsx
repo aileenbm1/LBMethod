@@ -6,7 +6,7 @@ import { fetchExerciseGif, preloadExerciseGifs } from "./src/exerciseGifs";
 /* ===================================================================
    TYPES
    =================================================================== */
-type Goal = "glute_hypertrophy"|"glute_growth"|"lower_body_focus"|"fat_loss"|"body_recomposition"|"muscle_gain";
+type Goal = "glute_hypertrophy"|"glute_growth"|"lower_body_focus"|"fat_loss"|"body_recomposition"|"muscle_gain"|"general_health";
 type Level = "beginner"|"intermediate"|"advanced";
 type Tab = "coach"|"clients"|"portal";
 type AuthRole = "coach"|"client";
@@ -86,13 +86,14 @@ const GOAL_LABELS: Record<Goal, string> = {
   glute_hypertrophy:"Hipertrofia de glúteo", glute_growth:"Crecimiento de glúteo",
   lower_body_focus:"Enfoque tren inferior", fat_loss:"Pérdida de grasa",
   body_recomposition:"Recomposición corporal", muscle_gain:"Ganancia muscular",
+  general_health:"Movimiento saludable",
 };
 const LEVEL_LABELS: Record<Level,string> = { beginner:"Principiante", intermediate:"Intermedio", advanced:"Avanzado" };
 const GENDER_LABELS: Record<Gender,string> = { female:"Mujer", male:"Hombre", unspecified:"No especificar" };
 const GOALS_BY_GENDER: Record<Gender, Goal[]> = {
-  female: ["glute_hypertrophy","lower_body_focus","fat_loss","body_recomposition","muscle_gain"],
-  male:   ["muscle_gain","fat_loss","body_recomposition","lower_body_focus"],
-  unspecified: ["glute_hypertrophy","lower_body_focus","fat_loss","body_recomposition","muscle_gain"],
+  female: ["glute_hypertrophy","lower_body_focus","fat_loss","body_recomposition","muscle_gain","general_health"],
+  male:   ["muscle_gain","fat_loss","body_recomposition","lower_body_focus","general_health"],
+  unspecified: ["glute_hypertrophy","lower_body_focus","fat_loss","body_recomposition","muscle_gain","general_health"],
 };
 type FocusMuscleKey = "glutes"|"glute_medius"|"glute_minimus"|"hamstrings"|"quadriceps"|"calves"|"core"|"chest"|"back"|"shoulders"|"biceps"|"triceps"|"upper_body";
 interface FocusOption { key: FocusMuscleKey; label: string; desc: string; suggestGoal: Goal; }
@@ -118,6 +119,7 @@ const GOAL_DESCRIPTIONS: Partial<Record<Goal,string>> = {
   fat_loss:"Pérdida de grasa conservando músculo. Sesiones de alta densidad.",
   body_recomposition:"Reducir grasa y ganar músculo simultáneamente.",
   muscle_gain:"Hipertrofia general. Splits Push/Pull/Legs para desarrollo completo.",
+  general_health:"Cuerpo completo, intensidad moderada. Ideal para empezar o moverse con bienestar.",
 };
 const SESSION_DURATION_OPTIONS: {v:SessionDuration;l:string}[] = [{v:45,l:"45 min"},{v:60,l:"60 min"},{v:75,l:"75 min"},{v:90,l:"90 min"}];
 const PATTERN_LABELS: Record<MovementPattern,string> = {

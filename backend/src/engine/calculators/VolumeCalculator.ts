@@ -49,6 +49,9 @@ export class VolumeCalculator {
 
     const adjustedMultiplier = volumeMultiplier * ageBias * monthsBias;
 
+    // Movimiento saludable: volumen bajo, distribución equilibrada cuerpo completo
+    if (goal === "general_health") return this.calculateHealth(level, daysPerWeek, adjustedMultiplier);
+
     // Para hombres: menos sets de glúteo, distribución más balanceada
     if (gender === "male") return this.calculateMale(level, daysPerWeek, adjustedMultiplier, weakPoints);
 
@@ -150,6 +153,43 @@ export class VolumeCalculator {
       lowerVolumePct: round2(finalLower / finalTotal),
       upperVolumePct: round2(upperSets / finalTotal),
       gluteFrequency: Math.round(daysPerWeek / 3),
+    };
+  }
+
+  /**
+   * Movimiento saludable: volumen reducido, progresión gradual, cuerpo completo.
+   * Ideal para personas sedentarias, mayores o que priorizan bienestar sobre estética.
+   */
+  private calculateHealth(
+    level: ExperienceLevel,
+    daysPerWeek: number,
+    volumeMultiplier = 1,
+  ): VolumePlan {
+    // Sets totales por semana — 20-30% menos que ganancia muscular estándar
+    const HEALTH_SETS: Record<ExperienceLevel, { min: number; max: number }> = {
+      beginner:     { min: 6,  max: 10 },
+      intermediate: { min: 10, max: 14 },
+      advanced:     { min: 12, max: 18 },
+    };
+    const range = HEALTH_SETS[level];
+    const freqFactor = Math.min(1, (daysPerWeek - 3) / 3);
+    const totalSets = Math.round((range.min + (range.max - range.min) * freqFactor) * volumeMultiplier);
+
+    // Distribución equilibrada: 50% inferior / 50% superior
+    const lowerSets = Math.round(totalSets * 0.50);
+    const upperSets = totalSets - lowerSets;
+    const weeklyGluteSets = Math.round(lowerSets * 0.30);
+    const weeklyQuadSets  = Math.round(lowerSets * 0.40);
+    const weeklyHamstringSets = lowerSets - weeklyGluteSets - weeklyQuadSets;
+
+    return {
+      weeklyGluteSets,
+      weeklyQuadSets,
+      weeklyHamstringSets,
+      weeklyUpperSets: upperSets,
+      lowerVolumePct: round2(lowerSets / totalSets),
+      upperVolumePct: round2(upperSets / totalSets),
+      gluteFrequency: Math.max(1, Math.round(daysPerWeek / 2)),
     };
   }
 

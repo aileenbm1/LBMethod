@@ -151,13 +151,16 @@ export class LBMethodEngine {
 
     const rng = new Rng(seed);
 
+    // Movimiento saludable: siempre 1 RIR adicional (más conservador)
+    const effectiveRir = user.goal === "general_health" ? Math.min(rir + 1, 5) : rir;
+
     const days: GeneratedDay[] = templates.map((template) => {
       const selections: SelectedExercise[] = this.selector
         .selectForDay(
           template, library, user.experienceLevel, rng, volumeMultiplier,
           limitations, weakPoints, user.goal, weekNumber, deload, allowedEquipment, maxExPerDay,
         )
-        .map((s) => ({ ...s, rir }));
+        .map((s) => ({ ...s, rir: effectiveRir }));
       return {
         dayIndex: template.dayIndex,
         focus: template.focus,

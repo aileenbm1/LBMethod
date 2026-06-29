@@ -51,6 +51,14 @@ const GENERAL_SPLITS: Record<number, DayFocus[]> = {
   6: ["chest_triceps", "back_biceps", "full_leg", "shoulder_triceps", "back_shoulder", "full_leg"],
 };
 
+/** Movimiento saludable — full body funcional, bajo impacto y sostenible. */
+const HEALTH_SPLITS: Record<number, DayFocus[]> = {
+  3: ["full_leg", "upper_body", "full_leg"],
+  4: ["full_leg", "upper_body", "full_leg", "back_shoulder"],
+  5: ["full_leg", "upper_body", "full_leg", "back_shoulder", "upper_body"],
+  6: ["full_leg", "upper_body", "full_leg", "upper_body", "back_shoulder", "full_leg"],
+};
+
 // ── Splits masculinos (PPL) ───────────────────────────────────────────────────
 
 const MALE_SPLITS: Record<number, DayFocus[]> = {
@@ -108,7 +116,9 @@ export class SplitGenerator {
 
     let foci: DayFocus[];
 
-    if (gender === "male") {
+    if (goal === "general_health") {
+      foci = HEALTH_SPLITS[days] ?? HEALTH_SPLITS[3];
+    } else if (gender === "male") {
       foci = MALE_SPLITS[days] ?? MALE_SPLITS[4];
     } else if (isGlutePriorityGoal(goal)) {
       // Método glúteo puro: solo glute_hypertrophy y glute_growth
