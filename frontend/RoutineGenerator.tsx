@@ -2414,7 +2414,66 @@ export default function RoutineGenerator() {
 
         {/* ========== CLIENTS ========== */}
         {authSession.role==="coach" && activeTab==="clients" && (
-          <section className="grid items-start gap-6 lg:grid-cols-[minmax(260px,0.8fr)_1.4fr]">
+          <section className="flex flex-col gap-5">
+
+            {/* Panel de invitaciones — siempre visible arriba */}
+            <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-display text-[17px] font-semibold">Invitaciones de registro</h3>
+                  <p className="text-[12px] text-[#8c8377]">Genera un link único para que tu asesorada llene su formulario.</p>
+                </div>
+                <button onClick={()=>setShowInvitePanel(!showInvitePanel)}
+                  className={`rounded-xl px-4 py-2 text-[13px] font-semibold transition ${showInvitePanel?"bg-[#17120d] text-white":"border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49]"}`}>
+                  {showInvitePanel?"Cerrar ×":"+ Nueva invitación"}
+                </button>
+              </div>
+
+              {showInvitePanel && (
+                <div className="flex flex-col gap-3 border-t border-[#f0eae0] pt-4">
+                  <div className="flex gap-2">
+                    <input className={`flex-1 ${inputCls}`} placeholder="Para quién es (opcional): Ana García" value={inviteNote} onChange={e=>setInviteNote(e.target.value)} onKeyDown={e=>e.key==="Enter"&&generateInvite()}/>
+                    <button onClick={generateInvite} disabled={inviteGenerating} className={`flex-none px-5 py-2 text-sm font-semibold ${primaryBtn}`}>
+                      {inviteGenerating?"Generando…":"Generar link"}
+                    </button>
+                  </div>
+
+                  {invites.length===0 && <p className="text-[12px] text-[#a39a8d] text-center py-2">Sin invitaciones aún.</p>}
+
+                  {invites.map(inv=>{
+                    const used=!!inv.usedAt;
+                    const expired=!used&&new Date(inv.expiresAt)<new Date();
+                    const active=!used&&!expired;
+                    return(
+                      <div key={inv.id} className={`rounded-[14px] border px-4 py-3 ${active?"border-[#e7e1d6]":used?"border-[#d4edd4] bg-[#f6fff6]":"border-[#ece6db] bg-[#fafaf9]"}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            {inv.note && <div className="text-[13px] font-semibold truncate">{inv.note}</div>}
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${active?"bg-[#f0e7d8] text-[#8f6a3c]":used?"bg-[#d4edd4] text-[#2e7d32]":"bg-[#ece6db] text-[#9a9186]"}`}>
+                                {active?"🟡 Activa":used?"✅ Usada":"⚠️ Expirada"}
+                              </span>
+                              {active && <span className="text-[10px] text-[#a39a8d]">Expira {new Date(inv.expiresAt).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-1.5 flex-none">
+                            {active && (
+                              <button onClick={()=>copyInviteLink(inv.token)}
+                                className={`rounded-xl px-3 py-1.5 text-[12px] font-semibold transition ${copiedInvite===inv.token?"bg-[#a87d49] text-white":"border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49]"}`}>
+                                {copiedInvite===inv.token?"✓ Copiado":"Copiar link"}
+                              </button>
+                            )}
+                            {!used && <button onClick={()=>revokeInvite(inv.id)} className="rounded-xl px-2 py-1.5 text-[11px] text-[#c62828] hover:bg-[#fde8e8]">✕</button>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,0.8fr)_1.4fr]">
             <div className="flex flex-col gap-2.5">
               {clients.map(c=>{const a=selectedClientId===c.id;return(
                 <button key={c.id} onClick={()=>setSelectedClientId(c.id)} className={`flex items-center gap-3 rounded-2xl border p-3.5 text-left transition ${a?"border-[#a87d49] bg-[#fdfbf7] ring-1 ring-[#a87d49]":"border-[#e7e1d6] bg-white hover:border-[#d8cdb8]"}`}>
@@ -2816,6 +2875,7 @@ export default function RoutineGenerator() {
               </div>
             )}
             {!selectedClient && <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-8 text-center text-sm text-[#a39a8d]">Selecciona un asesorado.</div>}
+          </div>{/* cierre grid clientes */}
           </section>
         )}
 
