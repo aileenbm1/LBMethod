@@ -815,8 +815,16 @@ export default function RoutineGenerator() {
       const d=await res.json() as {logs:ExerciseLogRecord[]};
       const newLogs:Record<string,SetLog[]>={};
       const newNotes:Record<string,string>={};
-      for(const log of d.logs){newLogs[log.exerciseName]=log.setsData;newNotes[log.exerciseName]=log.notes??"";}
-      setExerciseLogs(newLogs);setLogNotes(newNotes);
+      const alreadySaved=new Set<string>();
+      for(const log of d.logs){
+        newLogs[log.exerciseName]=log.setsData;
+        newNotes[log.exerciseName]=log.notes??"";
+        alreadySaved.add(log.exerciseName);
+      }
+      setExerciseLogs(newLogs);
+      setLogNotes(newNotes);
+      // Marcar como guardados los ejercicios que ya tienen log
+      if(alreadySaved.size>0) setSavedExercises(alreadySaved);
     }catch{}finally{setDayLogsLoaded(true);}
   }
 
@@ -824,7 +832,8 @@ export default function RoutineGenerator() {
 
   useEffect(()=>{
     if((portalTab!=="registrar"&&portalTab!=="rutina")||!portalClientId)return;
-    setSavedExercises(new Set());setSessionComplete(false);
+    // Reset local state — loadDayLogs poblará savedExercises desde la DB
+    setSavedExercises(new Set());setSessionComplete(false);setExerciseLogs({});setLogNotes({});
     const client=clients.find(c=>c.id===portalClientId);
     if(!client?.program)return;
     // Init sets from routine prescription
@@ -2033,13 +2042,30 @@ export default function RoutineGenerator() {
                           const goToDay=(w:number,d:number)=>{setLogWeek(w);setLogDay(d);setSavedExercises(new Set());setSessionComplete(false);setExerciseLogs({});setLogNotes({});};
 
                           if(sessionComplete){
+                            const allDays=currentWeekData?.days??[];
+                            const nextDayInWeek=allDays.find(d=>d.dayIndex===logDay+1);
+                            const nextWeek=allWeeks.find(w=>w.weekNumber===logWeek+1);
+                            const hasNextDay=!!nextDayInWeek||(!!nextWeek&&nextWeek.days.length>0);
                             return (
                               <div className="rounded-[18px] bg-[#17120d] p-8 text-center text-[#f4f1ea]">
                                 <div className="text-5xl mb-3">🎉</div>
                                 <h3 className="font-display text-[24px] font-semibold">¡Sesión completada!</h3>
                                 <p className="mt-2 text-[13px] text-[#b7ad9d]">Semana {logWeek} · Día {logDay+1} — {FOCUS_LABELS[currentDayData?.focus??""]??""}</p>
-                                <button onClick={()=>{setSessionComplete(false);setSavedExercises(new Set());setExerciseLogs({});setLogNotes({});}}
-                                  className="mt-5 rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white">Ver otro día</button>
+                                <p className="mt-1 text-[11px] text-[#9a9186]">Tus datos quedaron guardados</p>
+                                <div className="mt-5 flex flex-col gap-2.5 items-center">
+                                  {hasNextDay && (
+                                    <button onClick={()=>{
+                                      if(nextDayInWeek) goToDay(logWeek,logDay+1);
+                                      else if(nextWeek) goToDay(logWeek+1,nextWeek.days[0].dayIndex);
+                                    }} className="w-full max-w-[240px] rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white hover:bg-[#8f6538]">
+                                      Siguiente sesión →
+                                    </button>
+                                  )}
+                                  <button onClick={()=>{setSessionComplete(false);setSavedExercises(new Set());setExerciseLogs({});setLogNotes({});}}
+                                    className="w-full max-w-[240px] rounded-xl border border-white/20 px-6 py-2.5 text-sm font-semibold text-white/70 hover:text-white">
+                                    Ver otro día
+                                  </button>
+                                </div>
                               </div>
                             );
                           }
