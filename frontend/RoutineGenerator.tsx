@@ -1566,7 +1566,7 @@ export default function RoutineGenerator() {
           <div className="rounded-2xl border border-white/10 p-3.5">
             <div className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[#a87d49] text-[13px] font-semibold text-white">{sessionInitials}</span>
-              <div className="min-w-0"><div className="truncate text-[13px] font-semibold">{authSession.name}</div><div className="text-[10.5px] text-[#9a9186]">{authSession.role==="coach"?"Head Coach":"Clienta"}</div></div>
+              <div className="min-w-0"><div className="truncate text-[13px] font-semibold">{authSession.name}</div><div className="text-[10.5px] text-[#9a9186]">{authSession.role==="coach"?"Head Coach":"Asesorada"}</div></div>
             </div>
           </div>
           <button onClick={logout} className="rounded-[10px] px-3.5 py-2.5 text-left text-[12.5px] font-medium text-[#9a9186] transition hover:text-[#f4f1ea]">Cerrar sesión</button>
@@ -1711,9 +1711,9 @@ export default function RoutineGenerator() {
                 )}
                 {useExisting && (
                   <div className="mt-5">
-                    <label className="block"><span className={labelCls}>Selecciona clienta</span>
+                    <label className="block"><span className={labelCls}>Selecciona asesorada</span>
                       <select className={inputCls} value={selectedClientId} onChange={e=>setSelectedClientId(e.target.value)}>
-                        <option value="">— elige una clienta —</option>
+                        <option value="">— elige una asesorada —</option>
                         {clients.map(c=><option key={c.id} value={c.id}>{c.name} · {GOAL_LABELS[c.goal]}</option>)}
                       </select>
                     </label>
@@ -2053,7 +2053,7 @@ export default function RoutineGenerator() {
                       </button>
                     </div>
                     <p className="mt-1.5 text-[11px] text-[#b3aa9b]">
-                      La clienta puede usar su nombre, correo o ID para iniciar sesión.
+                      La asesorada puede usar su nombre, correo o ID para iniciar sesión.
                     </p>
                   </div>
                 </div>
@@ -2089,7 +2089,7 @@ export default function RoutineGenerator() {
                 </div>
 
                 <div className="mt-6 flex gap-3">
-                  <button onClick={()=>{resetWizard();setActiveTab("clients");}} className={`flex-1 py-3.5 text-sm ${ghostBtn}`}>Ver clientas</button>
+                  <button onClick={()=>{resetWizard();setActiveTab("clients");}} className={`flex-1 py-3.5 text-sm ${ghostBtn}`}>Ver asesoradas</button>
                   <button onClick={resetWizard} className={`flex-1 py-3.5 text-sm ${primaryBtn}`}>+ Nueva persona</button>
                 </div>
               </article>
@@ -2132,7 +2132,7 @@ export default function RoutineGenerator() {
 
             {selectedClient && (
               <div className="flex flex-col gap-4">
-                {/* Header clienta */}
+                {/* Header asesorada */}
                 <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -2455,7 +2455,7 @@ export default function RoutineGenerator() {
         {activeTab==="portal" && (
           <section className="mx-auto flex max-w-[800px] flex-col gap-5">
             {authSession.role==="coach" && (
-              <label className="block max-w-sm"><span className={labelCls}>Ver clienta</span>
+              <label className="block max-w-sm"><span className={labelCls}>Ver asesorada</span>
                 <select className={inputCls} value={selectedClientId} onChange={e=>setSelectedClientId(e.target.value)}>
                   <option value="">— selecciona —</option>
                   {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
@@ -3648,7 +3648,7 @@ function FloatingChat({clientId, myRole, otherName, apiFetch}: {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const otherRole = myRole === "coach" ? "client" : "coach";
-  const displayName = otherName || (myRole === "client" ? "Coach" : "Clienta");
+  const displayName = otherName || (myRole === "client" ? "Coach" : "Asesorada");
   const API_BASE = (import.meta.env.VITE_API_URL?.replace("/api","")) ?? "";
 
   // ---- carga de mensajes (siempre usa refs actualizados) ----
@@ -3803,7 +3803,7 @@ function FloatingChat({clientId, myRole, otherName, apiFetch}: {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[13.5px] font-semibold truncate">{displayName}</div>
-              <div className="text-[10px] text-[#9a9186]">{myRole==="coach" ? "Clienta" : "Head Coach"}</div>
+              <div className="text-[10px] text-[#9a9186]">{myRole==="coach" ? "Asesorada" : "Head Coach"}</div>
             </div>
             <div className="flex items-center gap-1">
               <div className="h-2 w-2 rounded-full bg-[#4caf50]" title="En línea"/>
