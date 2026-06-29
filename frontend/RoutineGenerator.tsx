@@ -640,6 +640,12 @@ export default function RoutineGenerator() {
   const [dashboardData, setDashboardData] = useState<{id:string;name:string;goal:string;lastSession:string|null;inactive:boolean}[]>([]);
   const [, setDashboardLoading] = useState(false);
 
+  /* --- Fotos de progreso --- */
+  const [progressPhotos, setProgressPhotos] = useState<{id:string;url:string;notes?:string;takenAt:string}[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoNote, setPhotoNote] = useState("");
+  const [compareMode, setCompareMode] = useState(false);
+
   /* --- Chat (movido a FloatingChat — autocontenido) --- */
 
   /* --- Global state --- */
@@ -698,6 +704,7 @@ export default function RoutineGenerator() {
       setSelectedClientId(authSession.clientId);
       setActiveTab("portal");
       loadWeightLogs(authSession.clientId);
+      loadProgressPhotos(authSession.clientId);
       // Cargar feedback previo
       apiFetch(`/usuario/${authSession.clientId}/feedback`).then(r=>r.json()).then((d:any)=>{
         if(d.feedbacks){const m:Record<string,string>={};for(const f of d.feedbacks)m[`${f.weekNumber}-${f.dayIndex}`]=f.feeling;setSessionFeedbacks(m);}
@@ -1022,6 +1029,39 @@ export default function RoutineGenerator() {
       setSessionFeedbacks(prev=>({...prev,[`${weekNumber}-${dayIndex}`]:feeling}));
     }catch{}
     finally{setFeedbackSaving(false);}
+  }
+
+  async function loadProgressPhotos(clientId:string){
+    try{
+      const res=await apiFetch(`/usuario/${clientId}/fotos`);
+      if(!res.ok)return;
+      const d=await res.json() as {photos:{id:string;url:string;notes?:string;takenAt:string}[]};
+      setProgressPhotos(d.photos);
+    }catch{}
+  }
+
+  async function uploadPhoto(file:File){
+    if(!portalClientId)return;
+    setPhotoUploading(true);setError(null);
+    try{
+      const form=new FormData();
+      form.append("photo",file);
+      if(photoNote.trim())form.append("notes",photoNote.trim());
+      const token=authSession?.token??"";
+      const res=await fetch(`${API}/usuario/${portalClientId}/fotos`,{method:"POST",headers:{Authorization:`Bearer ${token}`},body:form});
+      if(!res.ok){const d=await res.json().catch(()=>({})) as Record<string,string>;throw new Error(d.error??"Error al subir foto");}
+      setPhotoNote("");
+      await loadProgressPhotos(portalClientId);
+    }catch(e){setError(e instanceof Error?e.message:"Error al subir")}
+    finally{setPhotoUploading(false);}
+  }
+
+  async function deletePhoto(photoId:string){
+    if(!portalClientId)return;
+    try{
+      await apiFetch(`/usuario/${portalClientId}/fotos/${photoId}`,{method:"DELETE"});
+      setProgressPhotos(prev=>prev.filter(p=>p.id!==photoId));
+    }catch{}
   }
 
   async function loadDashboard(){
@@ -2669,6 +2709,63 @@ export default function RoutineGenerator() {
                   {/* Historial */}
                   {portalTab==="historial" && (
                     <div className="flex flex-col gap-4">
+
+                      {/* Fotos de progreso */}
+                      <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-display text-[17px] font-semibold">Fotos de progreso</h3>
+                          {progressPhotos.length>=2 && (
+                            <button onClick={()=>setCompareMode(!compareMode)}
+                              className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${compareMode?"bg-[#17120d] text-white":"border border-[#e0d9cc] text-[#8c8377]"}`}>
+                              {compareMode?"Galería":"Comparar →"}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Modo comparación: primera vs última */}
+                        {compareMode && progressPhotos.length>=2 && (
+                          <div className="mb-4 grid grid-cols-2 gap-3">
+                            {[progressPhotos[0],progressPhotos[progressPhotos.length-1]].map((p,i)=>(
+                              <div key={p.id} className="flex flex-col gap-1">
+                                <img src={p.url} alt="" className="w-full rounded-[12px] object-cover aspect-[3/4]"/>
+                                <div className="text-center">
+                                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#a87d49]">{i===0?"Inicio":"Ahora"}</div>
+                                  <div className="text-[10px] text-[#a39a8d]">{new Date(p.takenAt).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Galería */}
+                        {!compareMode && progressPhotos.length>0 && (
+                          <div className="mb-4 grid grid-cols-3 gap-2">
+                            {progressPhotos.map(p=>(
+                              <div key={p.id} className="relative group">
+                                <img src={p.url} alt="" className="w-full rounded-[10px] object-cover aspect-square"/>
+                                <div className="absolute inset-0 rounded-[10px] bg-black/0 group-hover:bg-black/30 transition flex items-end p-1.5">
+                                  <div className="hidden group-hover:flex w-full items-center justify-between">
+                                    <span className="text-[9px] text-white">{new Date(p.takenAt).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</span>
+                                    <button onClick={()=>deletePhoto(p.id)} className="text-white/80 hover:text-red-300 text-[11px]">✕</button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {progressPhotos.length===0 && (
+                          <p className="mb-4 text-center text-[12px] text-[#b3aa9b]">Aún no tienes fotos. ¡Sube tu primera foto de referencia!</p>
+                        )}
+
+                        {/* Upload */}
+                        <input className={inputCls} placeholder="Nota (opcional): semana 1, frente…" value={photoNote} onChange={e=>setPhotoNote(e.target.value)}/>
+                        <label className={`mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition ${photoUploading?"opacity-50 cursor-not-allowed bg-[#ece6db] text-[#8c8377]":primaryBtn}`}>
+                          {photoUploading?"Subiendo…":"📷 Subir foto"}
+                          <input type="file" accept="image/*" capture="environment" className="hidden" disabled={photoUploading}
+                            onChange={e=>{const f=e.target.files?.[0];if(f)uploadPhoto(f);e.target.value="";}}/>
+                        </label>
+                      </article>
 
                       {/* Registro de peso corporal */}
                       <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">

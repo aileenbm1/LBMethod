@@ -155,6 +155,7 @@ model User {
   weightLogs      WeightLog[]
   coachNotes      CoachNote[]
   sessionFeedback SessionFeedback[]
+  progressPhotos  ProgressPhoto[]
 }
 
 model Exercise {
@@ -373,6 +374,21 @@ model SessionFeedback {
 
   @@unique([userId, weekNumber, dayIndex])
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Fotos de progreso
+// ---------------------------------------------------------------------------
+
+model ProgressPhoto {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url      String   // URL pública en Supabase Storage
+  notes    String?
+  takenAt  DateTime @default(now())
+
+  @@index([userId, takenAt])
 }
 
 // ---------------------------------------------------------------------------

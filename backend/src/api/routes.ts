@@ -1,6 +1,10 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { timingSafeEqual } from "crypto";
+import multer from "multer";
+
+// Multer en memoria para fotos de progreso (se suben a Supabase Storage)
+const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 import { PrismaClient } from "@prisma/client";
 import type { RoutineService } from "./RoutineService";
 import {
@@ -506,6 +510,52 @@ export function buildRouter(service: RoutineService): Router {
     try {
       const feedbacks = await prisma.sessionFeedback.findMany({ where: { userId: req.params.id } });
       return res.json({ feedbacks });
+    } catch (err) { return next(err); }
+  });
+
+  // ── Fotos de progreso ─────────────────────────────────────────────────────
+  router.post("/usuario/:id/fotos", requireAuth, photoUpload.single("photo"), async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    if (!req.file) return res.status(400).json({ error: "No se recibió ninguna foto." });
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+    if (!supabaseUrl || !supabaseKey) return res.status(500).json({ error: "Storage no configurado." });
+
+    try {
+      const ext = req.file.originalname.split(".").pop() ?? "jpg";
+      const filename = `${req.params.id}/${Date.now()}.${ext}`;
+      const uploadRes = await fetch(
+        `${supabaseUrl}/storage/v1/object/progress-photos/${filename}`,
+        { method: "POST", headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": req.file.mimetype, "x-upsert": "true" }, body: req.file.buffer },
+      );
+      if (!uploadRes.ok) {
+        const err = await uploadRes.text();
+        return res.status(500).json({ error: "Error al subir foto.", detail: err });
+      }
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/progress-photos/${filename}`;
+      const notes = typeof req.body.notes === "string" ? req.body.notes : undefined;
+      const photo = await prisma.progressPhoto.create({ data: { userId: req.params.id, url: publicUrl, notes } });
+      return res.status(201).json({ photo });
+    } catch (err) { return next(err); }
+  });
+
+  router.get("/usuario/:id/fotos", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const photos = await prisma.progressPhoto.findMany({ where: { userId: req.params.id }, orderBy: { takenAt: "asc" } });
+      return res.json({ photos });
+    } catch (err) { return next(err); }
+  });
+
+  router.delete("/usuario/:id/fotos/:photoId", requireAuth, async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    try {
+      await prisma.progressPhoto.delete({ where: { id: req.params.photoId } });
+      return res.json({ ok: true });
     } catch (err) { return next(err); }
   });
 
