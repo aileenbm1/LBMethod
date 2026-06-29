@@ -343,8 +343,30 @@ export function buildRouter(service: RoutineService): Router {
         });
       }
 
-      const stored = await service.generateProgram(profile, weeks, seed, clientId);
-      res.status(201).json({ id: stored.id, program: stored.program });
+      // Calcular ajuste de volumen basado en feedback previo del asesorado
+      let volumeBias = 1.0;
+      let feedbackMessage = "";
+      if (clientId) {
+        const feedbacks = await prisma.sessionFeedback.findMany({
+          where: { userId: clientId },
+          orderBy: { createdAt: "desc" },
+          take: 6, // últimas 6 sesiones
+        });
+        if (feedbacks.length >= 3) {
+          const scores = feedbacks.map(f => f.feeling === "easy" ? 1 : f.feeling === "good" ? 0 : -1);
+          const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
+          if (avg <= -0.4) {
+            volumeBias = 0.85; // mayoría "duro" → -15% volumen
+            feedbackMessage = "Volumen reducido 15% basado en feedback: sesiones reportadas como difíciles.";
+          } else if (avg >= 0.4) {
+            volumeBias = 1.10; // mayoría "fácil" → +10% volumen
+            feedbackMessage = "Volumen aumentado 10% basado en feedback: sesiones reportadas como fáciles.";
+          }
+        }
+      }
+
+      const stored = await service.generateProgram(profile, weeks, seed, clientId, volumeBias);
+      res.status(201).json({ id: stored.id, program: stored.program, volumeBias, feedbackMessage });
     } catch (err) {
       next(err);
     }

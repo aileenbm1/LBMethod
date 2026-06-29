@@ -242,4 +242,10 @@ export interface GenerateOptions {
   /** Deterministic seed for reproducible generation in tests. */
   seed?: number;
   weekNumber?: number;
+  /**
+   * Multiplicador de volumen basado en feedback del asesorado.
+   * < 1 = reducir volumen (sesiones muy duras), > 1 = aumentar (demasiado fácil).
+   * Rango recomendado: 0.80 – 1.15
+   */
+  volumeBias?: number;
 }

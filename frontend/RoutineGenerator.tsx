@@ -232,6 +232,20 @@ const ROLE_ES: Record<string,string> = {
   main:"Principal", unilateral:"Unilateral", isolation:"Aislamiento", accessory:"Accesorio"
 };
 
+/** 1RM estimado con la fórmula de Epley. Solo válido para 1-10 reps. */
+function estimatedOneRM(weightKg: number, reps: number): number | null {
+  if(reps<=0||reps>10||weightKg<=0)return null;
+  if(reps===1)return weightKg;
+  return Math.round(weightKg*(1+reps/30)*10)/10;
+}
+
+/** Mejor 1RM estimado de un conjunto de sets. */
+function bestOneRM(sets:{weightKg:number;reps:number;completed:boolean}[]): number | null {
+  const estimates=sets.filter(s=>s.completed&&s.reps>=1&&s.reps<=10&&s.weightKg>0)
+    .map(s=>estimatedOneRM(s.weightKg,s.reps)??0).filter(v=>v>0);
+  return estimates.length>0?Math.max(...estimates):null;
+}
+
 /** Sugiere un rango de carga inicial basado en peso corporal, nivel y rol del ejercicio. */
 function suggestedLoad(equipment: string, category: string, level: Level, bwKg: number): string | null {
   if(!bwKg || bwKg <= 0) return null;
@@ -1290,8 +1304,9 @@ export default function RoutineGenerator() {
       }
       const res=await apiFetch("/generate-routine",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({clientId:flowClient.id,weeks:4})});
       if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d?.message??`Error ${res.status}`);}
-      const data=await res.json() as {program:Program};
+      const data=await res.json() as {program:Program;volumeBias?:number;feedbackMessage?:string};
       setFlowProgram(data.program);
+      if(data.feedbackMessage) setError(`ℹ️ ${data.feedbackMessage}`);
       const fresh=await refreshClients();
       const updFc=fresh.find(c=>c.id===flowClient.id);
       if(updFc)setFlowClient(updFc);
@@ -2700,6 +2715,8 @@ export default function RoutineGenerator() {
                                       </div>
                                     </div>
 
+                                    {/* 1RM estimado en tiempo real */}
+                                    {(()=>{const orm=bestOneRM(sets as {weightKg:number;reps:number;completed:boolean}[]);return orm?<p className="mt-2 text-[11px] text-[#a87d49] font-semibold">1RM estimado: ~{orm} kg</p>:null;})()}
                                     <input className={`mt-3 ${inputCls}`} placeholder="Notas: peso alcanzado, sensaciones…" value={logNotes[name]??""} onChange={e=>setLogNotes(prev=>({...prev,[name]:e.target.value}))}/>
                                     <button onClick={()=>saveExerciseLog(name,allNames)} disabled={logSaving}
                                       className={`mt-3 w-full py-3 text-sm font-semibold ${primaryBtn}`}>
@@ -3109,28 +3126,37 @@ export default function RoutineGenerator() {
                         {historyData.length>0 && (()=>{
                           const chartData=historyData.map(log=>({
                             label:`S${log.weekNumber}D${log.dayIndex+1}`,
-                            value:Math.max(...log.setsData.map(s=>s.weightKg),0),
+                            value:Math.max(...(log.setsData as {weightKg:number}[]).map(s=>s.weightKg),0),
                           }));
                           const maxKgAll=Math.max(...chartData.map(d=>d.value),0);
                           const firstKg=chartData[0]?.value??0;
                           const lastKg=chartData[chartData.length-1]?.value??0;
                           const delta=lastKg-firstKg;
+                          // 1RM del mejor set de toda la historia
+                          const allSets=historyData.flatMap(l=>l.setsData as {weightKg:number;reps:number;completed:boolean}[]);
+                          const best1RM=bestOneRM(allSets);
                           return(
                             <div className="mt-4">
                               <LineChart data={chartData}/>
-                              <div className="mt-3 grid grid-cols-3 gap-2">
+                              <div className={`mt-3 grid gap-2 ${best1RM?"grid-cols-4":"grid-cols-3"}`}>
                                 <div className="rounded-lg bg-[#faf8f4] p-2.5 text-center">
-                                  <div className="font-display text-[18px] font-semibold text-[#a87d49]">{maxKgAll}<span className="text-[10px] font-normal"> kg</span></div>
+                                  <div className="font-display text-[17px] font-semibold text-[#a87d49]">{maxKgAll}<span className="text-[10px] font-normal"> kg</span></div>
                                   <div className="text-[9px] uppercase tracking-wide text-[#9a9186]">Récord</div>
                                 </div>
                                 <div className="rounded-lg bg-[#faf8f4] p-2.5 text-center">
-                                  <div className="font-display text-[18px] font-semibold">{firstKg}<span className="text-[10px] font-normal"> kg</span></div>
+                                  <div className="font-display text-[17px] font-semibold">{firstKg}<span className="text-[10px] font-normal"> kg</span></div>
                                   <div className="text-[9px] uppercase tracking-wide text-[#9a9186]">Inicio</div>
                                 </div>
                                 <div className="rounded-lg bg-[#faf8f4] p-2.5 text-center">
-                                  <div className={`font-display text-[18px] font-semibold ${delta>=0?"text-[#2e7d32]":"text-[#c62828]"}`}>{delta>0?"+":""}{delta}<span className="text-[10px] font-normal"> kg</span></div>
+                                  <div className={`font-display text-[17px] font-semibold ${delta>=0?"text-[#2e7d32]":"text-[#c62828]"}`}>{delta>0?"+":""}{delta}<span className="text-[10px] font-normal"> kg</span></div>
                                   <div className="text-[9px] uppercase tracking-wide text-[#9a9186]">Progreso</div>
                                 </div>
+                                {best1RM && (
+                                  <div className="rounded-lg bg-[#f0e7d8] p-2.5 text-center">
+                                    <div className="font-display text-[17px] font-semibold text-[#8f6a3c]">~{best1RM}<span className="text-[10px] font-normal"> kg</span></div>
+                                    <div className="text-[9px] uppercase tracking-wide text-[#9a9186]">1RM est.</div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -3322,6 +3348,7 @@ export default function RoutineGenerator() {
             {prAlert.prev>0 && (
               <p className="mt-2 text-[13px] text-[#9a9186]">Antes: {prAlert.prev} kg · <span className="text-[#a87d49]">+{(prAlert.kg-prAlert.prev).toFixed(1)} kg</span></p>
             )}
+            {(()=>{const orm=estimatedOneRM(prAlert.kg,8);return orm?<p className="mt-1 text-[12px] text-[#9a9186]">1RM estimado: ~<span className="text-[#a87d49] font-semibold">{orm} kg</span></p>:null;})()}
             <button onClick={()=>setPrAlert(null)} className={`mt-6 w-full py-3 text-sm ${primaryBtn}`}>
               ¡A seguir rompiendo! 💪
             </button>

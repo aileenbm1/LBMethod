@@ -532,9 +532,10 @@ export class RoutineService {
     weeks: number,
     seed?: number,
     clientId?: string,
+    volumeBias?: number,
   ): Promise<StoredProgram> {
     const library = await this.repo.all();
-    const program = this.engine.generateProgram(profile, library, weeks, { seed });
+    const program = this.engine.generateProgram(profile, library, weeks, { seed, volumeBias });
     const stored: StoredProgram = {
       id: randomUUID(),
       clientId,

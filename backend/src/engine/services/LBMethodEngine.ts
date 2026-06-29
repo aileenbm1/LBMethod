@@ -68,8 +68,9 @@ export class LBMethodEngine {
     const MAX_ATTEMPTS = 64;
     let lastRoutine: GeneratedRoutine | null = null;
 
+    const bias = options.volumeBias ?? 1;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const routine = this.buildRoutine(user, library, weekNumber, prog.rir, prog.deload, prog.volumeMultiplier, baseSeed + attempt * 1013);
+      const routine = this.buildRoutine(user, library, weekNumber, prog.rir, prog.deload, prog.volumeMultiplier * bias, baseSeed + attempt * 1013);
       lastRoutine = routine;
       const result = this.validator.validate(routine);
       if (result.valid && !used.has(routine.signature)) {
@@ -99,6 +100,7 @@ export class LBMethodEngine {
         ...options,
         weekNumber: week,
         usedSignatures: Array.from(usedSignatures),
+        volumeBias: options.volumeBias,
       });
       usedSignatures.add(routine.signature);
       weeks.push(routine);
