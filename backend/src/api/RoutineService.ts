@@ -130,6 +130,9 @@ export class RoutineService {
       trainingLocation: (user.trainingLocation as TrainingLocation) ?? "gym",
       pin: user.pin ?? undefined,
       bodyweightKg: user.bodyweightKg ?? undefined,
+      age: (user as any).age ?? undefined,
+      monthsTrained: (user as any).monthsTrained ?? undefined,
+      homeEquipment: ((user as any).homeEquipment as string[] | undefined)?.filter(Boolean) as any ?? [],
       notes: user.notes ?? undefined,
       measurements: hasMeasurements ? measurements : undefined,
       weakPoints: user.weakPoints?.map((wp) => ({
@@ -179,6 +182,9 @@ export class RoutineService {
           sessionDuration: input.sessionDuration ?? 60,
           trainingLocation: (input.trainingLocation ?? "gym") as TrainingLocation,
           bodyweightKg: input.bodyweightKg,
+          age: input.age,
+          monthsTrained: input.monthsTrained,
+          homeEquipment: input.homeEquipment ?? [],
           notes: input.notes,
           pin,
           heightCm: input.measurements?.heightCm,
@@ -223,7 +229,7 @@ export class RoutineService {
   }
 
   /**
-   * Busca un cliente por email, nombre o ID.
+   * Busca un asesorado por email, nombre o ID.
    * La búsqueda es case-insensitive para email y nombre.
    */
   async findClientByIdentifier(identifier: string): Promise<StoredClient | undefined> {

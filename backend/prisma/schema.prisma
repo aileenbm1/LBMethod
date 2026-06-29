@@ -139,7 +139,10 @@ model User {
   trainingLocation  TrainingLocation  @default(gym)
   gender            Gender            @default(unspecified)
   sessionDuration   Int               @default(60)
-  // PIN de acceso que el coach entrega a la clienta (opcional)
+  age               Int?              // edad en años (opcional)
+  monthsTrained     Int?              // meses entrenando (0 = nuevo)
+  homeEquipment     String[]          @default([]) // equipamiento disponible en casa
+  // PIN de acceso que el coach entrega a la asesorada (opcional)
   pin             String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -447,7 +450,7 @@ enum MediaType {
   audio
 }
 
-// Una conversación por cliente (siempre con el coach)
+// Una conversación por asesorado (siempre con el coach)
 model Conversation {
   id        String    @id @default(cuid())
   clientId  String    @unique

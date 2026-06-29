@@ -586,6 +586,8 @@ export default function RoutineGenerator() {
   const [wizInjuries, setWizInjuries] = useState<Set<string>>(new Set());
   const [wizMonthsTrained, setWizMonthsTrained] = useState<string>("");
   const [wizWeight, setWizWeight] = useState<string>("");
+  const [wizAge, setWizAge] = useState<string>("");
+  const [wizHomeEquipment, setWizHomeEquipment] = useState<Set<string>>(new Set());
   const [wizSeverity, setWizSeverity] = useState<LimitationSeverity>("mild");
   const [wizLimitDesc, setWizLimitDesc] = useState("");
 
@@ -1270,7 +1272,13 @@ export default function RoutineGenerator() {
       const notes=[injuryNotes,historyNotes].filter(Boolean).join(" ")||undefined;
       const injuryLimitations=[...wizInjuries].map(zone=>({description:`Molestia en ${zone}`,affectedPatterns:["knee_dominant","hip_hinge","hip_thrust","unilateral","horizontal_push","vertical_push","horizontal_pull","vertical_pull"].slice(0,2),severity:"mild" as const}));
       const bodyweightKg=wizWeight&&!isNaN(Number(wizWeight))&&Number(wizWeight)>0?Number(wizWeight):undefined;
-      const res=await apiFetch("/usuario",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,goal,experienceLevel,daysPerWeek,gender:wizGender,sessionDuration:wizSessionDuration,trainingLocation:wizTrainingLocation,bodyweightKg,notes,limitations:injuryLimitations.length>0?injuryLimitations:undefined})});
+      const age=wizAge&&!isNaN(Number(wizAge))&&Number(wizAge)>0?Number(wizAge):undefined;
+      // Convertir historial de texto a meses numéricos
+      const monthsMap:Record<string,number>={"Menos de 6 meses":3,"6–12 meses":9,"1–2 años":18,"Más de 2 años":30};
+      const monthsTrained=wizMonthsTrained?monthsMap[wizMonthsTrained]:undefined;
+      // Equipamiento en casa
+      const homeEquipment=wizTrainingLocation==="home"&&wizHomeEquipment.size>0?[...wizHomeEquipment]:undefined;
+      const res=await apiFetch("/usuario",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,goal,experienceLevel,daysPerWeek,gender:wizGender,sessionDuration:wizSessionDuration,trainingLocation:wizTrainingLocation,bodyweightKg,age,monthsTrained,homeEquipment,notes,limitations:injuryLimitations.length>0?injuryLimitations:undefined})});
       if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d?.message??`Error ${res.status}`);}
       const data=await res.json() as {usuario:{id:string};generatedPin?:string};
       if(data.generatedPin) setGeneratedPin(data.generatedPin);
@@ -1427,7 +1435,7 @@ export default function RoutineGenerator() {
   }
 
   function logout(){setAuthSession(null);setLoginPassword("");setLoginEmail("");setLoginIdentifier("");setLoginPin("");setActiveTab("coach");resetWizard();}
-  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");setWizInjuries(new Set());setWizMonthsTrained("");setWizWeight("");}
+  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");setWizInjuries(new Set());setWizMonthsTrained("");setWizWeight("");setWizAge("");setWizHomeEquipment(new Set());}
   function copyPin(p:string){navigator.clipboard.writeText(p).then(()=>{setCopiedPin(true);setTimeout(()=>setCopiedPin(false),2500);});}
 
   const visibleTabs=[{id:"coach" as Tab,label:"Coach Studio"},{id:"clients" as Tab,label:"Asesorados"},{id:"portal" as Tab,label:"Portal"}];
@@ -1677,6 +1685,13 @@ export default function RoutineGenerator() {
                     </div>
 
                     <label className="block">
+                      <span className={labelCls}>Edad <span className="font-normal text-[#b3aa9b]">— opcional</span></span>
+                      <input className={inputCls} type="number" min={12} max={90} placeholder="Ej. 28"
+                        value={wizAge} onChange={e=>setWizAge(e.target.value)}/>
+                      <p className="mt-1 text-[11px] text-[#b3aa9b]">A partir de 45 años se ajusta el volumen para optimizar la recuperación.</p>
+                    </label>
+
+                    <label className="block">
                       <span className={labelCls}>Peso corporal (kg) <span className="font-normal text-[#b3aa9b]">— opcional</span></span>
                       <div className="relative mt-1">
                         <input className={inputCls} type="number" min={30} max={300} step={0.5}
@@ -1687,6 +1702,31 @@ export default function RoutineGenerator() {
                       </div>
                       <p className="mt-1 text-[11px] text-[#b3aa9b]">Se usa para sugerir cargas iniciales en la rutina. No se comparte con nadie.</p>
                     </label>
+
+                    {/* Equipamiento específico — solo para entreno en casa */}
+                    {wizTrainingLocation==="home" && (
+                      <div>
+                        <span className={labelCls}>Equipamiento disponible en casa</span>
+                        <p className="mt-0.5 mb-2 text-[11px] text-[#b3aa9b]">Selecciona solo lo que tienes. El motor elegirá ejercicios compatibles.</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {([
+                            ["bodyweight","Peso corporal"],
+                            ["dumbbell","Mancuernas"],
+                            ["band","Bandas elásticas"],
+                            ["kettlebell","Pesas rusas"],
+                            ["barbell","Barra + discos"],
+                          ] as [string,string][]).map(([eq,label])=>{
+                            const on=wizHomeEquipment.has(eq);
+                            return(
+                              <button key={eq} onClick={()=>setWizHomeEquipment(prev=>{const n=new Set(prev);on?n.delete(eq):n.add(eq);return n;})}
+                                className={`rounded-xl px-3.5 py-2 text-[12.5px] font-semibold transition border ${on?"border-[#a87d49] bg-[#a87d49] text-white":"border-[#e0d9cc] bg-white text-[#8c8377] hover:border-[#a87d49]"}`}>
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <span className={labelCls}>Historial de entrenamiento</span>

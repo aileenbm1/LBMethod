@@ -151,6 +151,12 @@ export interface UserProfile {
   sessionDuration?: SessionDuration;
   trainingLocation?: TrainingLocation;
   bodyweightKg?: number;
+  /** Edad en años. Afecta recuperación y volumen para 45+. */
+  age?: number;
+  /** Meses entrenando. Refina el volumen dentro del nivel declarado. */
+  monthsTrained?: number;
+  /** Equipamiento disponible (relevante para entreno en casa). */
+  homeEquipment?: Equipment[];
   measurements?: BodyMeasurements;
   weakPoints?: WeakPoint[];
   limitations?: Limitation[];

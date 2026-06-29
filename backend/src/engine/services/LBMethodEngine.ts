@@ -133,8 +133,11 @@ export class LBMethodEngine {
   ): GeneratedRoutine {
     const weakPoints = user.weakPoints ?? [];
     const limitations = user.limitations ?? [];
+    // Si especificó equipamiento en casa, usar ese; si no, usar el set completo de casa
     const allowedEquipment: Equipment[] | undefined =
-      user.trainingLocation === "home" ? HOME_EQUIPMENT : undefined;
+      user.trainingLocation === "home"
+        ? (user.homeEquipment && user.homeEquipment.length > 0 ? user.homeEquipment : HOME_EQUIPMENT)
+        : undefined;
     const maxExPerDay: number | undefined = user.sessionDuration
       ? SESSION_MAX_EXERCISES[user.sessionDuration]
       : undefined;
@@ -142,7 +145,7 @@ export class LBMethodEngine {
     const gender = user.gender ?? "unspecified";
     // Músculo con prioridad 3 = enfoque estructural (afecta el split)
     const focusMuscle = weakPoints.find(wp => wp.priority === 3)?.muscleGroup;
-    const volume = this.volume.calculate(user.goal, user.experienceLevel, user.daysPerWeek, volumeMultiplier, weakPoints, gender);
+    const volume = this.volume.calculate(user.goal, user.experienceLevel, user.daysPerWeek, volumeMultiplier, weakPoints, gender, user.age, user.monthsTrained);
     const templates = this.splits.generate(user.goal, user.daysPerWeek, gender, focusMuscle);
     volume.gluteFrequency = templates.filter((t) => t.isGluteDay).length;
 

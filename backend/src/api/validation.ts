@@ -62,6 +62,9 @@ export const createClientSchema = z.object({
   sessionDuration: sessionDurationSchema.default(60),
   trainingLocation: trainingLocationSchema.default("gym"),
   bodyweightKg: z.number().positive().optional(),
+  age: z.number().int().min(12).max(90).optional(),
+  monthsTrained: z.number().int().min(0).optional(),
+  homeEquipment: z.array(z.string()).optional(),
   measurements: bodyMeasurementsSchema.optional(),
   weakPoints: z.array(weakPointSchema).optional(),
   limitations: z.array(limitationSchema).optional(),
@@ -113,7 +116,7 @@ export const createCoachSchema = z.object({
 });
 
 export const clientLoginSchema = z.object({
-  // El cliente puede identificarse con su email, nombre o ID
+  // El asesorado puede identificarse con su email, nombre o ID
   identifier: z.string().min(1),
   pin: z.string().optional(),
 });
@@ -206,7 +209,7 @@ export const updateExerciseMediaSchema = z.object({
 export type RoutineDayEdit = z.infer<typeof routineDayEditSchema>;
 export type UpdateExerciseMediaInput = z.infer<typeof updateExerciseMediaSchema>;
 
-// ---- PIN de cliente --------------------------------------------------------
+// ---- PIN de asesorado --------------------------------------------------------
 
 export const setPinSchema = z.object({
   pin: z.string().min(6).max(12).nullable(),

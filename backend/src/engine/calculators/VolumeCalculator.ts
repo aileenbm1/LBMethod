@@ -28,9 +28,29 @@ export class VolumeCalculator {
     volumeMultiplier = 1,
     weakPoints: WeakPoint[] = [],
     gender: Gender = "unspecified",
+    age?: number,
+    monthsTrained?: number,
   ): VolumePlan {
+    // Ajuste por edad: 45–54 → -10%, 55+ → -20% (mayor tiempo de recuperación)
+    let ageBias = 1.0;
+    if (age && age >= 55) ageBias = 0.80;
+    else if (age && age >= 45) ageBias = 0.90;
+
+    // Ajuste por historial dentro del mismo nivel declarado
+    // Menos meses → menos volumen; más meses → puede tolerar más
+    let monthsBias = 1.0;
+    if (monthsTrained !== undefined) {
+      if (monthsTrained < 3)  monthsBias = 0.80;   // muy nuevo
+      else if (monthsTrained < 6)  monthsBias = 0.90;
+      else if (monthsTrained < 12) monthsBias = 1.00;
+      else if (monthsTrained < 24) monthsBias = 1.05;
+      else                         monthsBias = 1.10; // 2+ años
+    }
+
+    const adjustedMultiplier = volumeMultiplier * ageBias * monthsBias;
+
     // Para hombres: menos sets de glúteo, distribución más balanceada
-    if (gender === "male") return this.calculateMale(level, daysPerWeek, volumeMultiplier, weakPoints);
+    if (gender === "male") return this.calculateMale(level, daysPerWeek, adjustedMultiplier, weakPoints);
 
     const range = WEEKLY_GLUTE_SET_RANGE[level];
 
@@ -39,7 +59,7 @@ export class VolumeCalculator {
     const gluteDays = this.estimateGluteDays(goal, daysPerWeek);
     const span = range.max - range.min;
     const freqFactor = Math.min(1, (gluteDays - 1) / 4); // 1 day -> 0, 5 days -> 1
-    let weeklyGluteSets = Math.round((range.min + span * freqFactor) * volumeMultiplier);
+    let weeklyGluteSets = Math.round((range.min + span * freqFactor) * adjustedMultiplier);
 
     // Punto débil: glutes → boost directo en glute sets (máx +4 sets por prioridad)
     const gluteWeak = weakPoints.find((wp) =>
