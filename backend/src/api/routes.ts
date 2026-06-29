@@ -212,6 +212,40 @@ export function buildRouter(service: RoutineService): Router {
     }
   });
 
+  // Verificar token de invitación (público — para mostrar el formulario)
+  router.get("/invites/verify/:token", async (req, res, next) => {
+    try {
+      const invite = await prisma.invite.findUnique({ where: { token: req.params.token } });
+      if (!invite) return res.status(404).json({ error: "Invitación no encontrada." });
+      if (invite.usedAt) return res.status(410).json({ error: "Esta invitación ya fue utilizada." });
+      if (invite.expiresAt < new Date()) return res.status(410).json({ error: "Esta invitación expiró." });
+      return res.json({ valid: true, note: invite.note });
+    } catch (err) { return next(err); }
+  });
+
+  // Enviar formulario de registro (público)
+  router.post("/invites/:token/registro", async (req, res, next) => {
+    try {
+      const invite = await prisma.invite.findUnique({ where: { token: req.params.token } });
+      if (!invite) return res.status(404).json({ error: "Invitación no encontrada." });
+      if (invite.usedAt) return res.status(410).json({ error: "Esta invitación ya fue utilizada." });
+      if (invite.expiresAt < new Date()) return res.status(410).json({ error: "Esta invitación expiró." });
+
+      const parsed = createClientSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
+
+      const { client, generatedPin } = await service.createClient(parsed.data as any);
+
+      // Marcar invitación como usada
+      await prisma.invite.update({
+        where: { token: req.params.token },
+        data: { usedAt: new Date(), createdUserId: client.id },
+      });
+
+      return res.status(201).json({ client, generatedPin });
+    } catch (err) { return next(err); }
+  });
+
   router.use(requireAuth);
 
   router.get("/auth/me", (req, res) => {
@@ -583,40 +617,6 @@ export function buildRouter(service: RoutineService): Router {
     try {
       await prisma.invite.delete({ where: { id: req.params.id } });
       return res.json({ ok: true });
-    } catch (err) { return next(err); }
-  });
-
-  // Verificar token (público — para mostrar el formulario)
-  router.get("/invites/verify/:token", async (req, res, next) => {
-    try {
-      const invite = await prisma.invite.findUnique({ where: { token: req.params.token } });
-      if (!invite) return res.status(404).json({ error: "Invitación no encontrada." });
-      if (invite.usedAt) return res.status(410).json({ error: "Esta invitación ya fue utilizada." });
-      if (invite.expiresAt < new Date()) return res.status(410).json({ error: "Esta invitación expiró." });
-      return res.json({ valid: true, note: invite.note });
-    } catch (err) { return next(err); }
-  });
-
-  // Enviar formulario de registro (público)
-  router.post("/invites/:token/registro", async (req, res, next) => {
-    try {
-      const invite = await prisma.invite.findUnique({ where: { token: req.params.token } });
-      if (!invite) return res.status(404).json({ error: "Invitación no encontrada." });
-      if (invite.usedAt) return res.status(410).json({ error: "Esta invitación ya fue utilizada." });
-      if (invite.expiresAt < new Date()) return res.status(410).json({ error: "Esta invitación expiró." });
-
-      const parsed = createClientSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
-
-      const { client, generatedPin } = await service.createClient(parsed.data as any);
-
-      // Marcar invitación como usada
-      await prisma.invite.update({
-        where: { token: req.params.token },
-        data: { usedAt: new Date(), createdUserId: client.id },
-      });
-
-      return res.status(201).json({ client, generatedPin });
     } catch (err) { return next(err); }
   });
 
