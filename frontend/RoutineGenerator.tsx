@@ -674,6 +674,7 @@ export default function RoutineGenerator() {
   const [checkInForm, setCheckInForm] = useState({energy:3,sleep:3,stress:3,notes:""});
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
+  const [emailUpdateForm, setEmailUpdateForm] = useState<{email:string;submitting:boolean;message:string}>({email:"",submitting:false,message:""});
 
   /* --- Registro público (formulario de invitación) --- */
   type InviteStatus = "verifying"|"valid"|"invalid"|"submitting"|"done";
@@ -1207,6 +1208,21 @@ export default function RoutineGenerator() {
       const d=await res.json() as {checkIns:CheckIn[]};
       setCheckIns(d.checkIns);
     }catch{}
+  }
+
+  async function updateClientEmail(clientId:string,newEmail:string){
+    const em=newEmail.trim();
+    if(!em||!em.includes("@"))return;
+    setEmailUpdateForm(p=>({...p,submitting:true,message:""}));
+    try{
+      const res=await apiFetch(`/usuario/${clientId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em})});
+      if(!res.ok)throw new Error("Error al actualizar correo");
+      setClients(prev=>prev.map(c=>c.id===clientId?{...c,email:em}:c));
+      setEmailUpdateForm({email:"",submitting:false,message:"✓ Correo actualizado correctamente"});
+      setTimeout(()=>setEmailUpdateForm(p=>({...p,message:""})),3000);
+    }catch(e){
+      setEmailUpdateForm(p=>({...p,submitting:false,message:e instanceof Error?e.message:"Error al actualizar"}));
+    }
   }
 
   async function saveCheckIn(weekNumber:number){
@@ -2874,8 +2890,28 @@ export default function RoutineGenerator() {
             {(() => {
               const portalClient=clients.find(c=>c.id===portalClientId)??null;
               if(!portalClient)return <p className="text-sm text-[#a39a8d]">Selecciona un asesorado.</p>;
+              const hasGenericEmail=portalClient.email?.includes("@lbmethod.local");
               return (
                 <>
+                  {/* Banner: Actualizar email genérico */}
+                  {hasGenericEmail && (
+                    <div className="rounded-[16px] bg-gradient-to-r from-[#a87d49] to-[#c9956b] p-5 text-white">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-[14px]">¿Nos regalas tu mejor correo?</p>
+                          <p className="text-[12px] text-white/80 mt-1">Te permitirá entrar con email + PIN cada vez que quieras.</p>
+                        </div>
+                        <div className="flex gap-2 items-end">
+                          <input type="email" placeholder="tu@email.com" value={emailUpdateForm.email} onChange={e=>setEmailUpdateForm(p=>({...p,email:e.target.value}))} className="rounded-lg px-3 py-2 text-[12px] text-[#17120d] placeholder-[#a39a8d] flex-1 sm:flex-none" disabled={emailUpdateForm.submitting}/>
+                          <button onClick={()=>updateClientEmail(portalClientId!,emailUpdateForm.email)} disabled={!emailUpdateForm.email.trim()||emailUpdateForm.submitting} className="rounded-lg bg-white/20 hover:bg-white/30 disabled:opacity-50 px-4 py-2 text-[12px] font-semibold transition">
+                            {emailUpdateForm.submitting?"...":"Guardar"}
+                          </button>
+                        </div>
+                      </div>
+                      {emailUpdateForm.message && <p className="text-[11px] mt-2 text-white/90">{emailUpdateForm.message}</p>}
+                    </div>
+                  )}
+
                   {/* Header portal */}
                   <div className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] bg-[#17120d] px-7 py-5 text-[#f4f1ea]">
                     <div>

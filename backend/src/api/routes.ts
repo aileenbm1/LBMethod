@@ -316,6 +316,25 @@ export function buildRouter(service: RoutineService): Router {
     }
   });
 
+  router.patch("/usuario/:id", async (req, res, next) => {
+    const auth = (req as AuthedRequest).auth;
+    if (!canAccessClient(auth, req.params.id)) {
+      return res.status(403).json({ error: "Forbidden", message: "Solo puedes actualizar tu propio perfil." });
+    }
+    try {
+      const { email } = req.body as { email?: string };
+      if (!email) return res.status(400).json({ error: "Email requerido." });
+
+      const updated = await prisma.user.update({
+        where: { id: req.params.id },
+        data: { email: email.trim().toLowerCase() },
+      });
+      res.json({ usuario: updated });
+    } catch (err) {
+      return next(err);
+    }
+  });
+
   router.patch("/usuario/:id/perfil", async (req, res, next) => {
     const auth = (req as AuthedRequest).auth;
     if (!canAccessClient(auth, req.params.id) && auth?.role !== "coach") {
