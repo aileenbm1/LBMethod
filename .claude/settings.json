@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "PowerShell(Get-Process -Id 27752, 43584 -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 27752 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 43584 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(cd \"c:\\\\Users\\\\a_barrientos.m\\\\OneDrive - Secretaría de Educación de Guanajuato\\\\PROTOTIPO REACT\\\\LB\\\\backend\"; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd \"c:\\\\Users\\\\a_barrientos.m\\\\OneDrive - Secretaría de Educación de Guanajuato\\\\PROTOTIPO REACT\\\\LB\\\\backend\"; npm run dev' -WindowStyle Normal; Write-Host \"Servidor de desarrollo iniciado en nueva ventana\")",
+      "Read(//c/Users/a_barrientos.m/OneDrive - Secretaría de Educação de Guanajuato/PROTOTIPO REACT/LB/backend/src/api/**)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)"
+    ]
+  }
+}

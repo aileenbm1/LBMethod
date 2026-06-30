@@ -20,7 +20,7 @@ interface AttemptRecord { count: number; windowStart: number; lockedUntil?: numb
 interface CodeRecord    { code: string; expiresAt: number; used: boolean; }
 
 const coachAttempts  = new Map<string, AttemptRecord>();
-const clientAttempts = new Map<string, AttemptRecord>();
+const asesoradattempts = new Map<string, AttemptRecord>();
 const pendingCodes   = new Map<string, CodeRecord>();
 
 function now() { return Date.now(); }
@@ -93,9 +93,9 @@ export function resendCoachCode(email: string): boolean {
 // ── Client ────────────────────────────────────────────────────────────────
 
 export function recordClientFailedAttempt(identifier: string): { locked: boolean; lockedUntil?: number } {
-  const rec = clientAttempts.get(identifier) ?? { count: 0, windowStart: now() };
+  const rec = asesoradattempts.get(identifier) ?? { count: 0, windowStart: now() };
   rec.count += 1;
-  clientAttempts.set(identifier, rec);
+  asesoradattempts.set(identifier, rec);
 
   if (rec.count >= CLIENT_LOCKOUT_THRESHOLD) {
     rec.lockedUntil = now() + CLIENT_LOCKOUT_MS;
@@ -105,14 +105,14 @@ export function recordClientFailedAttempt(identifier: string): { locked: boolean
 }
 
 export function isClientLocked(identifier: string): { locked: boolean; lockedUntil?: number } {
-  const rec = clientAttempts.get(identifier);
+  const rec = asesoradattempts.get(identifier);
   if (!rec?.lockedUntil) return { locked: false };
-  if (now() >= rec.lockedUntil) { clientAttempts.delete(identifier); return { locked: false }; }
+  if (now() >= rec.lockedUntil) { asesoradattempts.delete(identifier); return { locked: false }; }
   return { locked: true, lockedUntil: rec.lockedUntil };
 }
 
-export function clearClientAttempts(identifier: string) {
-  clientAttempts.delete(identifier);
+export function clearasesoradattempts(identifier: string) {
+  asesoradattempts.delete(identifier);
 }
 
 // ── Email ─────────────────────────────────────────────────────────────────

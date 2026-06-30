@@ -304,9 +304,9 @@ npm run prisma:seed
 # 3) Levanta API con DB
 USE_DB=true npm run dev
 
-# 4) Ahora persiste clientes y programas
+# 4) Ahora persiste asesorados y programas
 curl -X POST http://localhost:3000/api/client ...
-# El cliente se guarda en DB
+# El asesorado se guarda en DB
 ```
 
 ---

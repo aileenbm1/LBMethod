@@ -48,7 +48,7 @@ Endpoints disponibles:
 # Ver biblioteca de ejercicios
 curl http://localhost:3000/api/exercise-library | jq '.exercises | length'
 
-# Crear un cliente
+# Crear un asesorado
 curl -X POST http://localhost:3000/api/client \
   -H "Content-Type: application/json" \
   -d '{
@@ -58,7 +58,7 @@ curl -X POST http://localhost:3000/api/client \
     "daysPerWeek": 5
   }'
 
-# Generar una rutina (sin cliente previo)
+# Generar una rutina (sin asesorado previo)
 curl -X POST http://localhost:3000/api/generate-routine \
   -H "Content-Type: application/json" \
   -d '{
@@ -169,7 +169,7 @@ program.weeks.forEach((week) => {
 2. **Tunar reglas** → edita `src/engine/rules/businessRules.ts`
 3. **Cambiar mesociclo** → edita `src/engine/services/ProgressionEngine.ts` + `MESOCYCLE`
 4. **Conectar a tu frontend** → usa los endpoints `/api/*` desde React
-5. **Historiales de cliente** → agrega campos a Prisma schema + seed
+5. **Historiales de asesorado** → agrega campos a Prisma schema + seed
 6. **Tracking real** → implementa POST `/api/log-workout` que actualice `TrainingHistory`
 
 ---

@@ -58,6 +58,7 @@ interface Selection {
 interface LibraryExercise {
   id: string; name: string; muscleGroup: string;
   primaryMuscle: string; category: string; equipment: string;
+  movementPattern: string;
 }
 
 interface DayExerciseEdit {
@@ -910,6 +911,23 @@ export default function RoutineGenerator() {
     });
   }
 
+  function getCompatibleExercises(currentExerciseId:string):LibraryExercise[]{
+    const current=exerciseLibrary.find(e=>e.id===currentExerciseId);
+    if(!current)return exerciseLibrary;
+    return exerciseLibrary.filter(e=>
+      e.primaryMuscle===current.primaryMuscle||e.movementPattern===current.movementPattern
+    );
+  }
+
+  function getExerciseLabel(ex:LibraryExercise):string{
+    const muscleMap:Record<string,string>={
+      glutes_maximus:"Glúteo Mayor",glutes_medius:"Glúteo Medio",glutes_minimus:"Glúteo Menor",
+      hamstrings:"Femorales",quadriceps:"Cuádriceps",calves:"Gemelos",
+      back:"Espalda",biceps:"Bíceps",triceps:"Tríceps",chest:"Pecho",shoulders:"Hombros",core:"Core"
+    };
+    return `${ex.name} (${muscleMap[ex.primaryMuscle]||ex.primaryMuscle})`;
+  }
+
   function changeExercise(key:string, idx:number, exerciseId:string) {
     if(exerciseId==="__new__"){setCreatingExercise({key,idx,name:"",muscleGroup:"Glúteo"});return;}
     const ex=exerciseLibrary.find(e=>e.id===exerciseId);
@@ -927,7 +945,7 @@ export default function RoutineGenerator() {
     const {key,idx,name,muscleGroup}=creatingExercise;
     const n=name.trim();
     if(!n)return;
-    const newEx:LibraryExercise={id:`local_${Date.now()}`,name:n,muscleGroup,primaryMuscle:muscleGroup,category:"strength",equipment:"machine"};
+    const newEx:LibraryExercise={id:`local_${Date.now()}`,name:n,muscleGroup,primaryMuscle:muscleGroup,category:"strength",equipment:"machine",movementPattern:"custom"};
     setExerciseLibrary(prev=>[...prev,newEx]);
     setDayEdits(prev=>{
       const day={...prev[key]};
@@ -2260,8 +2278,8 @@ export default function RoutineGenerator() {
                                           </select>
                                           <select value={ex.exerciseId} onChange={e=>changeExercise(key,idx,e.target.value)} className="rounded-lg border border-[#e0d9cc] bg-white px-2 py-1.5 text-[12px] focus:border-[#a87d49] focus:outline-none truncate">
                                             <option value="__new__">➕ Crear ejercicio…</option>
-                                            {exerciseLibrary.map(lib=>(
-                                              <option key={lib.id} value={lib.id}>{tx(lib.name)} ({lib.muscleGroup})</option>
+                                            {getCompatibleExercises(ex.exerciseId).map(lib=>(
+                                              <option key={lib.id} value={lib.id}>{getExerciseLabel(lib)}</option>
                                             ))}
                                           </select>
                                           <input type="number" min={1} max={10} value={ex.sets} onChange={e=>updateDayExercise(key,idx,"sets",Number(e.target.value))} className="rounded-lg border border-[#e0d9cc] bg-white p-1.5 text-center text-[13px] font-semibold focus:border-[#a87d49] focus:outline-none"/>
