@@ -84,7 +84,10 @@ export class LBMethodEngine {
     return lastRoutine;
   }
 
-  /** Generate a full multi-week program (default: one 4-week mesocycle). */
+  /** Generate a full multi-week program (default: one 4-week mesocycle).
+   *  All weeks use the SAME exercises; only technique, load, and volume change.
+   *  Progression is via RIR ↓ and training method intensity, not exercise variation.
+   */
   generateProgram(
     user: UserProfile,
     library: Exercise[],
@@ -92,17 +95,26 @@ export class LBMethodEngine {
     options: GenerateOptions = {},
   ): GeneratedProgram {
     const progression = this.progression.buildMesocycle();
-    const usedSignatures = new Set(options.usedSignatures ?? []);
     const weeks: GeneratedRoutine[] = [];
 
-    for (let week = 1; week <= totalWeeks; week++) {
+    // Generate week 1 as the template (same exercises for all weeks in this mesocycle)
+    const templateRoutine = this.generateRoutine(user, library, {
+      ...options,
+      weekNumber: 1,
+      usedSignatures: options.usedSignatures,
+      volumeBias: options.volumeBias,
+    });
+    weeks.push(templateRoutine);
+
+    // Weeks 2-4 use the same exercises as week 1, only RIR/technique/volume changes
+    for (let week = 2; week <= totalWeeks; week++) {
       const routine = this.generateRoutine(user, library, {
         ...options,
         weekNumber: week,
-        usedSignatures: Array.from(usedSignatures),
+        usedSignatures: [templateRoutine.signature], // Only enforce week 1's exercises
+        seed: options.seed ? options.seed + week : undefined, // Deterministic but slightly varied
         volumeBias: options.volumeBias,
       });
-      usedSignatures.add(routine.signature);
       weeks.push(routine);
     }
 
