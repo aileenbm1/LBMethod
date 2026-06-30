@@ -2899,7 +2899,7 @@ export default function RoutineGenerator() {
 
         {/* ========== PORTAL ========== */}
         {activeTab==="portal" && (
-          <section className="mx-auto flex max-w-[800px] flex-col gap-5">
+          <section className="mx-auto flex max-w-[900px] flex-col gap-8">
             {authSession.role==="coach" && (
               <label className="block max-w-sm"><span className={labelCls}>Ver asesorada</span>
                 <select className={inputCls} value={selectedClientId} onChange={e=>setSelectedClientId(e.target.value)}>
@@ -2935,46 +2935,62 @@ export default function RoutineGenerator() {
                   )}
 
                   {/* Header portal */}
-                  <div className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] bg-[#17120d] px-7 py-5 text-[#f4f1ea]">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a87d49]">{authSession?.role==="coach"?"Asesorado":"Plan activo"}</div>
-                      <h2 className="font-display mt-1 text-[28px] font-semibold">{portalClient.name}</h2>
-                      <p className="mt-0.5 text-[12px] text-[#b7ad9d]">{GOAL_LABELS[portalClient.goal]} · {portalClient.daysPerWeek} días/sem</p>
-                      {authSession?.role==="client" && (
-                        <button onClick={()=>setShowCheckIn(true)}
-                          className="mt-2 rounded-xl border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white/70 hover:text-white hover:border-white/40 transition">
-                          📋 Check-in semanal
-                        </button>
-                      )}
-                    </div>
-                    <div className="text-center">
-                      <div className="font-display text-[48px] font-semibold leading-none">{adherence(portalClient)}%</div>
-                      <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#9a9186]">adherencia</div>
+                  <div className="relative rounded-[24px] bg-gradient-to-br from-[#17120d] to-[#2a1f15] px-8 py-7 text-[#f4f1ea] shadow-lg">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
+                      <div className="flex-1">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c9956b]">{authSession?.role==="coach"?"Asesorado":"Plan activo"}</div>
+                        <h2 className="font-display mt-2 text-[32px] font-semibold leading-tight">{portalClient.name}</h2>
+                        <div className="mt-3 flex flex-wrap gap-4 text-[13px]">
+                          <span className="text-[#b7ad9d]">{GOAL_LABELS[portalClient.goal]}</span>
+                          <span className="text-[#9a9186]">•</span>
+                          <span className="text-[#b7ad9d]">{portalClient.daysPerWeek} días/semana</span>
+                        </div>
+                        {authSession?.role==="client" && (
+                          <button onClick={()=>setShowCheckIn(true)}
+                            className="mt-4 rounded-lg border border-white/30 px-4 py-2 text-[12px] font-semibold text-white/80 hover:text-white hover:border-white/60 transition">
+                            📋 Check-in semanal
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-6 sm:flex-col sm:items-center">
+                        <div className="text-center">
+                          <div className="font-display text-[56px] font-semibold leading-none text-[#c9956b]">{adherence(portalClient)}%</div>
+                          <div className="mt-2 text-[10px] uppercase tracking-[0.14em] text-[#9a9186] font-semibold">adherencia</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {/* Coach: Listado de rutinas */}
                   {authSession?.role==="coach" && (
-                    <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-display text-[18px] font-semibold text-[#17120d]">Historial de rutinas</h3>
-                        <span className="text-[12px] font-semibold text-[#8c8377]">{clientRoutines.length} rutina{clientRoutines.length!==1?'s':''}</span>
+                    <div className="rounded-[20px] border-2 border-[#e7e1d6] bg-[#faf8f4] p-7">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="font-display text-[20px] font-semibold text-[#17120d]">Historial de rutinas</h3>
+                          <p className="text-[12px] text-[#8c8377] mt-1">{clientRoutines.length} rutina{clientRoutines.length!==1?'s':''}</p>
+                        </div>
                       </div>
                       {clientRoutines.length===0?(
-                        <p className="text-[13px] text-[#8c8377] text-center py-4">Sin rutinas generadas aún</p>
+                        <div className="rounded-lg border border-dashed border-[#d8cdb8] bg-white p-8 text-center">
+                          <p className="text-[14px] text-[#8c8377]">No hay rutinas generadas aún</p>
+                          <p className="text-[12px] text-[#a39a8d] mt-2">Crea una nueva rutina para este cliente</p>
+                        </div>
                       ):(
                         <div className="space-y-3">
                           {clientRoutines.map((routine, idx) => (
-                            <div key={routine.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-[#ece6db] p-4 hover:border-[#a87d49] transition">
+                            <div key={routine.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-lg border border-[#e7e1d6] bg-white p-4 hover:bg-[#faf8f4] hover:border-[#a87d49] transition shadow-sm">
                               <div className="flex-1">
-                                <p className="text-[13px] font-semibold text-[#17120d]">#{clientRoutines.length - idx}</p>
-                                <p className="text-[12px] text-[#8c8377] mt-1">{new Date(routine.createdAt).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})} · <span className="capitalize">{routine.goal.replace(/_/g, ' ')}</span></p>
+                                <div className="flex items-baseline gap-2">
+                                  <p className="text-[14px] font-bold text-[#a87d49]">#{clientRoutines.length - idx}</p>
+                                  <p className="text-[12px] text-[#8c8377]">{new Date(routine.createdAt).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})}</p>
+                                </div>
+                                <p className="text-[12px] text-[#8c8377] mt-2 capitalize">{routine.goal.replace(/_/g, ' ')}</p>
                               </div>
-                              <div className="flex gap-2">
-                                <button onClick={() => {setSelectedClientId(portalClientId!); setFlowProgram(portalClient.program); setCoachStep(3);}} className="rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-4 py-2 text-[11px] font-semibold transition whitespace-nowrap">
+                              <div className="flex gap-2 sm:flex-nowrap">
+                                <button onClick={() => {setSelectedClientId(portalClientId!); setFlowProgram(portalClient.program); setCoachStep(3);}} className="flex-1 sm:flex-none rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-5 py-2 text-[12px] font-semibold transition whitespace-nowrap">
                                   Ver
                                 </button>
-                                <button onClick={() => deleteRoutine(routine.id)} className="rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 text-[11px] font-semibold transition whitespace-nowrap">
+                                <button onClick={() => deleteRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-5 py-2 text-[12px] font-semibold transition whitespace-nowrap">
                                   Eliminar
                                 </button>
                               </div>
@@ -2986,9 +3002,9 @@ export default function RoutineGenerator() {
                   )}
 
                   {/* Portal sub-tabs */}
-                  <div className="flex gap-1 rounded-2xl border border-[#e7e1d6] bg-white p-1">
+                  <div className="flex gap-2 border-b-2 border-[#e7e1d6]">
                     {PORTAL_TABS.map(t=>(
-                      <button key={t.id} onClick={()=>setPortalTab(t.id)} className={`flex-1 rounded-xl py-2.5 text-[12.5px] font-semibold transition ${portalTab===t.id?"bg-[#17120d] text-white":"text-[#8c8377] hover:text-[#17120d]"}`}>{t.label}</button>
+                      <button key={t.id} onClick={()=>setPortalTab(t.id)} className={`px-4 py-3 text-[13px] font-semibold transition border-b-2 -mb-[2px] ${portalTab===t.id?"border-[#a87d49] text-[#a87d49]":"border-transparent text-[#8c8377] hover:text-[#17120d]"}`}>{t.label}</button>
                     ))}
                   </div>
 
