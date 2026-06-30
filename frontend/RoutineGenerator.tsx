@@ -679,8 +679,8 @@ export default function RoutineGenerator() {
   type InviteStatus = "verifying"|"valid"|"invalid"|"submitting"|"done";
   const [inviteStatus, setInviteStatus] = useState<InviteStatus>("verifying");
   const [inviteError, setInviteError] = useState("");
-  const [regForm, setRegForm] = useState({name:"",goal:"glute_hypertrophy" as Goal,gender:"unspecified" as Gender,experienceLevel:"beginner" as Level,daysPerWeek:4,sessionDuration:60 as SessionDuration,trainingLocation:"gym" as TrainingLocation,age:"",bodyweightKg:"",monthsTrained:"",homeEquipment:new Set<string>(),injuries:new Set<string>(),focusMuscle:"" as FocusMuscleKey|""});
-  const [regSubmitted, setRegSubmitted] = useState<{pin:string;name:string}|null>(null);
+  const [regForm, setRegForm] = useState({email:"",name:"",goal:"glute_hypertrophy" as Goal,gender:"unspecified" as Gender,experienceLevel:"beginner" as Level,daysPerWeek:4,sessionDuration:60 as SessionDuration,trainingLocation:"gym" as TrainingLocation,age:"",bodyweightKg:"",monthsTrained:"",homeEquipment:new Set<string>(),injuries:new Set<string>(),focusMuscle:"" as FocusMuscleKey|""});
+  const [regSubmitted, setRegSubmitted] = useState<{pin:string;name:string;email:string}|null>(null);
 
   /* --- Gestión de invitaciones (coach) --- */
   type InviteRecord = {id:string;token:string;note?:string;expiresAt:string;usedAt?:string;createdUserId?:string;createdAt:string};
@@ -1148,6 +1148,7 @@ export default function RoutineGenerator() {
     try{
       const monthsMap:Record<string,number>={"Menos de 6 meses":3,"6–12 meses":9,"1–2 años":18,"Más de 2 años":30};
       const body:Record<string,unknown>={
+        email:regForm.email.trim(),
         name:regForm.name.trim(),goal:regForm.goal,experienceLevel:regForm.experienceLevel,
         daysPerWeek:regForm.daysPerWeek,gender:regForm.gender,sessionDuration:regForm.sessionDuration,
         trainingLocation:regForm.trainingLocation,
@@ -1161,7 +1162,7 @@ export default function RoutineGenerator() {
       const res=await fetch(`${API}/invites/${registroToken}/registro`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       const d=await res.json() as {client?:{name:string};generatedPin?:string;error?:string};
       if(!res.ok) throw new Error(d.error??"Error al enviar formulario.");
-      setRegSubmitted({pin:d.generatedPin??"",name:d.client?.name??regForm.name});
+      setRegSubmitted({pin:d.generatedPin??"",name:d.client?.name??regForm.name,email:regForm.email.trim()});
       setInviteStatus("done");
     }catch(e){setInviteError(e instanceof Error?e.message:"Error");setInviteStatus("valid");}
   }
@@ -1587,10 +1588,16 @@ export default function RoutineGenerator() {
             <div className="text-5xl mb-4">🎉</div>
             <h2 className="font-display text-[24px] font-semibold">¡Registro completado!</h2>
             <p className="mt-2 text-[13px] text-[#b7ad9d]">Hola, {regSubmitted.name}. Tu perfil fue creado.</p>
-            <div className="mt-5 rounded-2xl bg-white/10 p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a87d49] mb-2">Tu PIN de acceso</div>
-              <div className="font-mono text-[36px] font-bold tracking-[0.2em]">{regSubmitted.pin}</div>
-              <p className="mt-2 text-[11px] text-[#9a9186]">Guárdalo — lo necesitarás para entrar a la app.</p>
+            <div className="mt-5 rounded-2xl bg-white/10 p-5 space-y-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a87d49] mb-1">Correo</div>
+                <div className="font-mono text-[14px]">{regSubmitted.email}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a87d49] mb-2">PIN de acceso</div>
+                <div className="font-mono text-[36px] font-bold tracking-[0.2em]">{regSubmitted.pin}</div>
+              </div>
+              <p className="text-[11px] text-[#9a9186]">Para entrar a la app, usa: <strong>correo + PIN</strong></p>
             </div>
             <p className="mt-4 text-[12px] text-[#9a9186]">Tu coach generará tu rutina personalizada y te avisará cuando esté lista.</p>
             <a href="/asesorado" className="mt-5 inline-block rounded-xl bg-[#a87d49] px-6 py-3 text-sm font-semibold text-white">
@@ -1610,6 +1617,11 @@ export default function RoutineGenerator() {
             {/* Nombre */}
             <label className="block"><span className={labelCls}>Nombre completo *</span>
               <input className={inputCls} placeholder="Ej. María García" value={regForm.name} onChange={e=>setRegForm(p=>({...p,name:e.target.value}))}/>
+            </label>
+
+            {/* Email */}
+            <label className="block"><span className={labelCls}>Correo electrónico *</span>
+              <input className={inputCls} type="email" placeholder="tu@email.com" value={regForm.email} onChange={e=>setRegForm(p=>({...p,email:e.target.value}))}/>
             </label>
 
             {/* Género */}
@@ -1715,7 +1727,7 @@ export default function RoutineGenerator() {
               </select>
             </label>
 
-            <button onClick={submitRegistro} disabled={!regForm.name.trim()||inviteStatus==="submitting"}
+            <button onClick={submitRegistro} disabled={!regForm.name.trim()||!regForm.email.trim()||inviteStatus==="submitting"}
               className={`mt-2 w-full py-4 text-[15px] font-semibold ${primaryBtn}`}>
               {inviteStatus==="submitting"?"Enviando…":"Enviar mis datos →"}
             </button>

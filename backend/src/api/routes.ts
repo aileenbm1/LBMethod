@@ -231,6 +231,11 @@ export function buildRouter(service: RoutineService): Router {
       if (invite.usedAt) return res.status(410).json({ error: "Esta invitación ya fue utilizada." });
       if (invite.expiresAt < new Date()) return res.status(410).json({ error: "Esta invitación expiró." });
 
+      // Email es requerido para registro vía invitación
+      if (!req.body.email || typeof req.body.email !== "string" || !req.body.email.includes("@")) {
+        return res.status(400).json({ error: "El correo electrónico es requerido y debe ser válido." });
+      }
+
       const parsed = createClientSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "ValidationError", details: parsed.error.flatten() });
 
