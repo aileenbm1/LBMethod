@@ -1461,6 +1461,15 @@ export default function RoutineGenerator() {
     }catch(e){setError(e instanceof Error?e.message:"Error al guardar PIN");}
   }
 
+  async function deleteRoutine(routineId:string){
+    if(!confirm("¿Seguro que quieres eliminar esta rutina?"))return;
+    try{
+      const res=await apiFetch(`/routine/${routineId}`,{method:"DELETE"});
+      if(!res.ok)throw new Error("Error al eliminar rutina");
+      await refreshClients();
+    }catch(e){setError(e instanceof Error?e.message:"Error al eliminar rutina");}
+  }
+
   async function saveProgress(){
     if(!selectedClient?.program)return;
     setLoading(true);setError(null);
@@ -3213,6 +3222,7 @@ export default function RoutineGenerator() {
                                     onApplySwap={applySwap}
                                     onCancelSwap={()=>{setSwapTarget(null);setSwapOptions([]);}}
                                     onShowExercise={setExerciseModal}
+                                    onDeleteRoutine={deleteRoutine}
                                     gifMap={gifMap}
                                   />
                                 </div>
@@ -3847,18 +3857,19 @@ interface ClientProgramViewProps {
   onApplySwap: (newId:string)=>void;
   onCancelSwap: ()=>void;
   onShowExercise: (ex:{name:string;imageUrl?:string;videoUrl?:string})=>void;
+  onDeleteRoutine?: (routineId:string)=>Promise<void>;
   gifMap: Record<string,string|null>;
 }
 const EQUIP_LABEL: Record<string,string> = {
   barbell:"Barra",dumbbell:"Mancuernas",machine:"Máquina",cable:"Polea",
   smith:"Smith",bodyweight:"Peso corporal",band:"Banda",kettlebell:"Kettlebell",
 };
-function ClientProgramView({program,routineId,clientLevel,clientLocation,swapTarget,swapOptions,swapLoading,swapSaving,onOpenSwap,onApplySwap,onCancelSwap,onShowExercise,gifMap}:ClientProgramViewProps){
+function ClientProgramView({program,routineId,clientLevel,clientLocation,swapTarget,swapOptions,swapLoading,swapSaving,onOpenSwap,onApplySwap,onCancelSwap,onShowExercise,onDeleteRoutine,gifMap}:ClientProgramViewProps){
   const allSame=program.weeks.length>1&&program.weeks.slice(1).every(w=>weekEq(w,program.weeks[0]));
   const weeksToShow=allSame?[program.weeks[0]]:program.weeks;
   return(
     <div className="flex flex-col gap-3.5">
-      {weeksToShow.map(week=>(
+      {weeksToShow.map((week,idx)=>(
         <article key={week.weekNumber} className="rounded-2xl border border-[#e7e1d6] bg-white p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-baseline gap-3">
@@ -3866,7 +3877,10 @@ function ClientProgramView({program,routineId,clientLevel,clientLocation,swapTar
               {allSame&&<span className="rounded-full bg-[#f0e7d8] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8f6a3c]">{program.weeks.length} semanas · misma estructura</span>}
               {!allSame&&week.deload&&<span className="rounded-full bg-[#f0e7d8] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8f6a3c]">Deload</span>}
             </div>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8c8377]">{allSame?`RIR progresivo sem 1–${program.weeks.length}`:week.deload?"Semana de descarga":`RIR objetivo ${week.rir}`}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8c8377]">{allSame?`RIR progresivo sem 1–${program.weeks.length}`:week.deload?"Semana de descarga":`RIR objetivo ${week.rir}`}</span>
+              {idx===0&&onDeleteRoutine&&<button onClick={()=>onDeleteRoutine(routineId)} className="rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 text-[11px] font-semibold transition">Eliminar</button>}
+            </div>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2.5">
             {volumeStats(program.goal, week).map(({v,l})=>(

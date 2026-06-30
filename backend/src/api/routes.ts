@@ -845,5 +845,17 @@ export function buildRouter(service: RoutineService): Router {
     }
   });
 
+  router.delete("/routine/:id", requireRole("coach"), async (req, res, next) => {
+    try {
+      const routineId = req.params.id;
+      const routine = await prisma.routine.findUnique({ where: { id: routineId } });
+      if (!routine) return res.status(404).json({ error: "RoutineNotFound" });
+      await prisma.routine.delete({ where: { id: routineId } });
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }
