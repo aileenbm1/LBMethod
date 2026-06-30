@@ -617,6 +617,7 @@ export default function RoutineGenerator() {
 
   /* --- Portal --- */
   const [portalTab, setPortalTab] = useState<PortalTab>("rutina");
+  const [clientDetailTab, setClientDetailTab] = useState<"avance"|"rutinas"|"perfil">("avance");
 
   /* --- Exercise logging --- */
   const [logWeek, setLogWeek] = useState(1);
@@ -2610,6 +2611,18 @@ export default function RoutineGenerator() {
                   </div>
                 </article>
 
+                {/* ===== Sub-tabs detalle asesorado ===== */}
+                <div className="flex gap-1 border-b-2 border-[#e7e1d6]">
+                  {([["avance","Avance"],["rutinas","Rutinas"],["perfil","Perfil"]] as const).map(([id,label])=>(
+                    <button key={id} onClick={()=>setClientDetailTab(id)}
+                      className={`px-5 py-3 text-[13.5px] font-semibold transition border-b-2 -mb-[2px] ${clientDetailTab===id?"border-[#a87d49] text-[#a87d49]":"border-transparent text-[#8c8377] hover:text-[#17120d]"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ========== AVANCE ========== */}
+                {clientDetailTab==="avance" && (<>
                 {/* Progreso semanal */}
                 {selectedClient.program && (
                   <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
@@ -2671,6 +2684,15 @@ export default function RoutineGenerator() {
                     </article>
                   );
                 })()}
+                </>)}
+
+                {/* ========== RUTINAS ========== */}
+                {clientDetailTab==="rutinas" && (<>
+                {/* Historial de mesociclos */}
+                <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                  <h3 className="font-display text-[18px] font-semibold mb-4">Historial de rutinas</h3>
+                  <RoutinesTab progress={selectedClient.progress} daysPerWeek={selectedClient.daysPerWeek} groupProgressByMesocycles={groupProgressByMesocycles}/>
+                </article>
 
                 {/* Templates — acceso rápido */}
                 {templates.length>0 && (
@@ -2733,6 +2755,30 @@ export default function RoutineGenerator() {
                           </div>
                         );
                       }))}
+                    </div>
+                  </article>
+                )}
+
+                </>)}
+
+                {/* ========== PERFIL ========== */}
+                {clientDetailTab==="perfil" && (
+                  <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                    <h3 className="font-display text-[18px] font-semibold mb-5">Perfil del asesorado</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {([
+                        ["Nombre", selectedClient.name],
+                        ["Objetivo", GOAL_LABELS[selectedClient.goal]],
+                        ["Nivel", LEVEL_LABELS[selectedClient.experienceLevel]],
+                        ["Días por semana", `${selectedClient.daysPerWeek} días`],
+                        ["Email", selectedClient.email?.includes("@lbmethod.local") ? "— sin email —" : (selectedClient.email ?? "—")],
+                        ["Adherencia", `${adherence(selectedClient)}%`],
+                      ] as [string,string][]).map(([label,value])=>(
+                        <div key={label} className="rounded-[13px] border border-[#ece6db] bg-[#faf8f4] p-4">
+                          <div className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[#a39a8d]">{label}</div>
+                          <div className="mt-1 text-[14px] font-semibold text-[#17120d]">{value}</div>
+                        </div>
+                      ))}
                     </div>
                   </article>
                 )}
