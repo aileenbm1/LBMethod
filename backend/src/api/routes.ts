@@ -831,6 +831,19 @@ export function buildRouter(service: RoutineService): Router {
     }
   });
 
+  router.get("/usuario/:clientId/routines", requireRole("coach"), async (req, res, next) => {
+    try {
+      const routines = await prisma.routine.findMany({
+        where: { userId: req.params.clientId },
+        select: { id: true, weekNumber: true, createdAt: true, goal: true },
+        orderBy: { createdAt: "desc" },
+      });
+      res.json({ routines });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/routine/:id", async (req, res, next) => {
     try {
       const auth = (req as AuthedRequest).auth;

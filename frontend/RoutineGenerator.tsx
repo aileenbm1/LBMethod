@@ -600,6 +600,7 @@ export default function RoutineGenerator() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("coach");
+  const [clientRoutines, setClientRoutines] = useState<Array<{id:string;createdAt:string;goal:string}>>([]);
   const [progressWeek, setProgressWeek] = useState(1);
   const [completedSessions, setCompletedSessions] = useState(0);
   const [progressNotes, setProgressNotes] = useState("");
@@ -1047,6 +1048,18 @@ export default function RoutineGenerator() {
     }
     loadDayLogs(portalClientId,logWeek,logDay);
   },[portalTab,logWeek,logDay,portalClientId]);
+
+  useEffect(()=>{
+    if(authSession?.role!=="coach"||!portalClientId)return;
+    (async()=>{
+      try{
+        const res=await apiFetch(`/usuario/${portalClientId}/routines`);
+        if(!res.ok)return;
+        const data=await res.json() as {routines:Array<{id:string;createdAt:string;goal:string}>};
+        setClientRoutines(data.routines);
+      }catch(e){}
+    })();
+  },[portalClientId,authSession?.role]);
 
   async function saveExerciseLog(exerciseName:string, allNames?: string[]){
     if(!portalClientId)return;
@@ -2940,6 +2953,31 @@ export default function RoutineGenerator() {
                       <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#9a9186]">adherencia</div>
                     </div>
                   </div>
+
+                  {/* Listado de rutinas para coaches */}
+                  {authSession?.role==="coach" && clientRoutines.length>0 && (
+                    <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-5">
+                      <h3 className="font-display text-[18px] font-semibold text-[#17120d] mb-4">Rutinas del cliente</h3>
+                      <div className="space-y-2">
+                        {clientRoutines.map((routine, idx) => (
+                          <div key={routine.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#ece6db] p-3.5 hover:border-[#a87d49] transition">
+                            <div>
+                              <p className="text-[13px] font-semibold text-[#17120d]">Rutina #{clientRoutines.length - idx}</p>
+                              <p className="text-[11px] text-[#8c8377] mt-0.5">{new Date(routine.createdAt).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})} · {routine.goal.replace(/_/g, ' ')}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => {setSelectedClientId(portalClientId); setFlowProgram(portalClient.program); setCoachStep(3);}} className="rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-3 py-1.5 text-[11px] font-semibold transition">
+                                Ver
+                              </button>
+                              <button onClick={() => deleteRoutine(routine.id)} className="rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 text-[11px] font-semibold transition">
+                                Eliminar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Portal sub-tabs */}
                   <div className="flex gap-1 rounded-2xl border border-[#e7e1d6] bg-white p-1">
