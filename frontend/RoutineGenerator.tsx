@@ -5,7 +5,7 @@ import { fetchExerciseGif, preloadExerciseGifs } from "./src/exerciseGifs";
 import { PortalTabBar } from "./components/portal/PortalTabs";
 import { RoutinesTab } from "./components/portal/RoutinesTab";
 import { AvanceCharts } from "./components/portal/AvanceCharts";
-import { WhyThisRoutine } from "./components/portal/WhyThisRoutine";
+import { WhyThisRoutine, buildRoutineRationale } from "./components/portal/WhyThisRoutine";
 
 /* ===================================================================
    TYPES
@@ -404,6 +404,45 @@ function downloadPdf(client:Client, program:Program) {
   doc.text(meta, ML + 5, y + 19);
 
   y += 34;
+
+  // ── ¿Por qué esta rutina? ──
+  const rationale = buildRoutineRationale(program as any, GOAL_LABELS[client.goal], LEVEL_LABELS[client.experienceLevel]);
+  if (rationale.length > 0) {
+    // Pre-medir bloques para calcular alto del recuadro
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(7.5);
+    const blocks = rationale.map(b => ({ title: b.title, lines: doc.splitTextToSize(b.text, CW - 14) as string[] }));
+    let boxH = 13; // franja título
+    for (const blk of blocks) boxH += 4.3 + blk.lines.length * 3.5 + 2.2;
+    boxH += 2;
+
+    checkPage(boxH + 8);
+    const boxTop = y;
+    doc.setFillColor(...R.sand);
+    doc.roundedRect(ML, y, CW, boxH, 3, 3, "F");
+    doc.setDrawColor(...R.light);
+    doc.roundedRect(ML, y, CW, boxH, 3, 3, "S");
+
+    doc.setTextColor(...R.gold);
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(9.5);
+    doc.text("¿POR QUÉ ESTA RUTINA?", ML + 5, y + 8);
+
+    let yy = y + 14;
+    for (const blk of blocks) {
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(8.2);
+      doc.setTextColor(...R.dark);
+      doc.text("•  " + blk.title, ML + 5, yy);
+      yy += 4.3;
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...R.mid);
+      doc.text(blk.lines, ML + 9, yy);
+      yy += blk.lines.length * 3.5 + 2.2;
+    }
+    y = boxTop + boxH + 8;
+  }
 
   // ── Semanas ──
   for (const week of weeksToRender) {
