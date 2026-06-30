@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import lbMethodLogo from "./src/assets/lbmethod-logo.jpg";
 import jsPDF from "jspdf";
 import { fetchExerciseGif, preloadExerciseGifs } from "./src/exerciseGifs";
-import { PortalTabBar, PORTAL_TABS } from "./components/portal/PortalTabs";
+import { PortalTabBar } from "./components/portal/PortalTabs";
 import { RoutinesTab } from "./components/portal/RoutinesTab";
 
 /* ===================================================================
