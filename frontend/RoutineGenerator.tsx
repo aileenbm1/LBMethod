@@ -2900,14 +2900,16 @@ export default function RoutineGenerator() {
 
         {/* ========== PORTAL ========== */}
         {activeTab==="portal" && (
-          <section className="mx-auto flex max-w-[900px] flex-col gap-8">
+          <section className={authSession.role==="coach"?"mx-auto w-full flex flex-col gap-8":"mx-auto flex max-w-[900px] flex-col gap-8"}>
             {authSession.role==="coach" && (
-              <label className="block max-w-sm"><span className={labelCls}>Ver asesorada</span>
-                <select className={inputCls} value={selectedClientId} onChange={e=>setSelectedClientId(e.target.value)}>
-                  <option value="">— selecciona —</option>
-                  {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </label>
+              <div className="mx-auto w-full max-w-[1200px] px-4">
+                <label className="block max-w-sm"><span className={labelCls}>Ver asesorada</span>
+                  <select className={inputCls} value={selectedClientId} onChange={e=>setSelectedClientId(e.target.value)}>
+                    <option value="">— selecciona —</option>
+                    {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </label>
+              </div>
             )}
 
             {(() => {
