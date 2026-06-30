@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import lbMethodLogo from "./src/assets/lbmethod-logo.jpg";
 import jsPDF from "jspdf";
 import { fetchExerciseGif, preloadExerciseGifs } from "./src/exerciseGifs";
+import { PortalTabBar, PORTAL_TABS } from "./components/portal/PortalTabs";
+import { RoutinesTab } from "./components/portal/RoutinesTab";
 
 /* ===================================================================
    TYPES
@@ -138,11 +140,7 @@ const FOCUS_LABELS: Record<string,string> = {
   shoulder_triceps:"Hombros · Tríceps", chest_triceps:"Pecho · Tríceps",
   full_leg:"Pierna completa", legs_push:"Cuádriceps · Pierna",
 };
-const PORTAL_TABS: {id: PortalTab; label: string}[] = [
-  {id:"rutina", label:"Mi entrenamiento"},
-  {id:"rutinas", label:"Historial de rutinas"},
-  {id:"chat", label:"Chat coach"}, {id:"historial", label:"Historial"},
-];
+// PORTAL_TABS moved to components/portal/PortalTabs.tsx
 
 const EX: Record<string,string> = {
   "Barbell Hip Thrust":"Hip Thrust con Barra","Smith Machine Hip Thrust":"Hip Thrust en Smith",
@@ -3005,11 +3003,7 @@ export default function RoutineGenerator() {
                   )}
 
                   {/* Portal sub-tabs */}
-                  <div className="flex gap-2 border-b-2 border-[#e7e1d6]">
-                    {PORTAL_TABS.map(t=>(
-                      <button key={t.id} onClick={()=>setPortalTab(t.id)} className={`px-4 py-3 text-[13px] font-semibold transition border-b-2 -mb-[2px] ${portalTab===t.id?"border-[#a87d49] text-[#a87d49]":"border-transparent text-[#8c8377] hover:text-[#17120d]"}`}>{t.label}</button>
-                    ))}
-                  </div>
+                  <PortalTabBar activeTab={portalTab} onTabChange={setPortalTab} isCoach={authSession?.role==="coach"} />
 
                   {/* Mi entrenamiento — vista diaria + registro fusionados */}
                   {portalTab==="rutina" && (
@@ -3719,43 +3713,11 @@ export default function RoutineGenerator() {
 
                   {/* Historial de rutinas - Mesociclos */}
                   {portalTab==="rutinas" && authSession?.role==="coach" && (
-                    <div className="space-y-4">
-                      {(() => {
-                        const mesocycles = groupProgressByMesocycles(portalClient.progress, portalClient.daysPerWeek);
-                        if(mesocycles.every(m => m.weeks.length === 0)) {
-                          return <div className="rounded-lg border border-[#e7e1d6] bg-[#faf8f4] p-6 text-center text-[#8c8377]">Sin historial de entrenamiento aún</div>;
-                        }
-                        return mesocycles.map(meso => (
-                          <div key={meso.num} className="rounded-lg border border-[#e7e1d6] bg-white p-5">
-                            <div className="flex items-center justify-between mb-4">
-                              <div>
-                                <div className="text-lg font-semibold text-[#17120d]">Mesociclo {meso.num}</div>
-                                <div className="text-xs text-[#8c8377] mt-1">Semanas {(meso.num-1)*4+1}–{meso.num*4}</div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <div className="text-sm font-semibold text-[#a87d49]">{meso.completedSessions}/{meso.totalSessions}</div>
-                                  <div className="text-xs text-[#8c8377]">sesiones</div>
-                                </div>
-                                <div className={`px-3 py-1 rounded-full text-xs font-semibold ${meso.status === 'closed' ? 'bg-[#f1ece0] text-[#a89f8d]' : meso.status === 'active' ? 'bg-[#e9efe3] text-[#5f7a4f]' : 'bg-[#e6ecf2] text-[#4a6076]'}`}>
-                                  {meso.status === 'closed' ? 'Cerrado' : meso.status === 'active' ? 'En curso' : 'Próximo'}
-                                </div>
-                              </div>
-                            </div>
-                            {meso.weeks.length > 0 && (
-                              <div className="space-y-2 text-xs text-[#8c8377]">
-                                {meso.weeks.map(week => (
-                                  <div key={week.weekNumber} className="flex justify-between">
-                                    <span>Semana {week.weekNumber}</span>
-                                    <span>{week.completedSessions}/{portalClient.daysPerWeek} sesiones</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ));
-                      })()}
-                    </div>
+                    <RoutinesTab
+                      progress={portalClient.progress}
+                      daysPerWeek={portalClient.daysPerWeek}
+                      groupProgressByMesocycles={groupProgressByMesocycles}
+                    />
                   )}
                 </>
               );
