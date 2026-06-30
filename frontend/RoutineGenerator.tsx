@@ -736,6 +736,7 @@ export default function RoutineGenerator() {
   const [inviteNote, setInviteNote] = useState("");
   const [inviteGenerating, setInviteGenerating] = useState(false);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
+  const [showAllInvites, setShowAllInvites] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState<string|null>(null);
 
   /* --- Templates de rutinas --- */
@@ -2655,10 +2656,32 @@ export default function RoutineGenerator() {
                 </div>
               )}
 
-              {/* Lista de invitaciones — SIEMPRE visible */}
+              {/* Resumen compacto + lista colapsable */}
               {invites.length===0
                 ? <p className="text-[12px] text-[#a39a8d] text-center py-2">Sin invitaciones. Genera una con el botón de arriba.</p>
-                : <div className="flex flex-col gap-2 mt-2">
+                : (()=>{
+                  const pendingInvites=invites.filter(i=>!i.usedAt && new Date(i.expiresAt)>=new Date());
+                  const avatarSrc=(pendingInvites.length?pendingInvites:invites).slice(0,5);
+                  return(
+                  <div className="mt-2">
+                    {/* Barra resumen — clic para desplegar */}
+                    <button onClick={()=>setShowAllInvites(v=>!v)}
+                      className="flex w-full items-center justify-between gap-3 rounded-[14px] border border-[#e7e1d6] bg-[#fafaf8] px-4 py-3 text-left transition hover:border-[#d8cdb8]">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span className="h-2 w-2 flex-none rounded-full bg-[#a87d49]"/>
+                        <span className="text-[13.5px] font-semibold">Invitaciones pendientes ({pendingInvites.length})</span>
+                        <span className="flex -space-x-2">
+                          {avatarSrc.map(inv=>(
+                            <span key={inv.id} title={inv.note||""} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#17120d] text-[9px] font-semibold text-[#f4f1ea]">{inv.note?initials(inv.note):"?"}</span>
+                          ))}
+                          {invites.length>avatarSrc.length && <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#ece6db] text-[9px] font-semibold text-[#8c8377]">+{invites.length-avatarSrc.length}</span>}
+                        </span>
+                      </span>
+                      <span className="flex-none text-[12px] font-semibold text-[#a87d49]">{showAllInvites?"Ocultar ▾":"Ver todas ▸"}</span>
+                    </button>
+
+                    {/* Lista completa — solo al desplegar */}
+                    {showAllInvites && <div className="flex flex-col gap-2 mt-2">
                   {invites.map(inv=>{
                     const used=!!inv.usedAt;
                     const expired=!used&&new Date(inv.expiresAt)<new Date();
@@ -2688,7 +2711,10 @@ export default function RoutineGenerator() {
                       </div>
                     );
                   })}
-                </div>
+                </div>}
+                  </div>
+                  );
+                })()
               }
             </div>
 
