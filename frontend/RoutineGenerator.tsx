@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import { fetchExerciseGif, preloadExerciseGifs } from "./src/exerciseGifs";
 import { PortalTabBar } from "./components/portal/PortalTabs";
 import { RoutinesTab } from "./components/portal/RoutinesTab";
+import { AvanceCharts } from "./components/portal/AvanceCharts";
 
 /* ===================================================================
    TYPES
@@ -2623,6 +2624,26 @@ export default function RoutineGenerator() {
 
                 {/* ========== AVANCE ========== */}
                 {clientDetailTab==="avance" && (<>
+                {/* Gráficas y métricas */}
+                {selectedClient.program && (()=>{
+                  const weeks=selectedClient.program!.weeks;
+                  const progByWeek=new Map(selectedClient.progress.map(p=>[p.weekNumber,p]));
+                  const recent=weeks.slice(-6);
+                  const volumeData=recent.map(w=>{
+                    const plannedSets=w.days.reduce((s,d)=>s+(d.totalSets||d.selections.length),0);
+                    const cs=progByWeek.get(w.weekNumber)?.completedSessions??0;
+                    const frac=selectedClient.daysPerWeek>0?cs/selectedClient.daysPerWeek:0;
+                    return {label:`S${w.weekNumber}`,value:Math.round(plannedSets*frac)};
+                  });
+                  let running=0;
+                  const strengthData=volumeData.map(d=>{running+=d.value;return {label:d.label,value:running};});
+                  const totalSessions=selectedClient.progress.reduce((s,p)=>s+p.completedSessions,0);
+                  const firstVol=volumeData.find(d=>d.value>0)?.value??0;
+                  const lastVol=volumeData.length>0?volumeData[volumeData.length-1].value:0;
+                  const deltaPct=firstVol>0?Math.round(((lastVol-firstVol)/firstVol)*100):0;
+                  return <AvanceCharts volumeData={volumeData} strengthData={strengthData} adherencePct={adherence(selectedClient)} totalSessions={totalSessions} deltaPct={deltaPct}/>;
+                })()}
+
                 {/* Progreso semanal */}
                 {selectedClient.program && (
                   <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
