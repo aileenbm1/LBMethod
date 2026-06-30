@@ -77,7 +77,7 @@ interface Day { dayIndex: number; focus: string; sessionFatigue: number; totalSe
 interface Week { weekNumber: number; rir: number; deload: boolean; volume: { weeklyGluteSets: number; lowerVolumePct: number; upperVolumePct: number; gluteFrequency: number; }; days: Day[]; }
 interface Program { goal: Goal; level: Level; daysPerWeek: number; weeks: Week[]; }
 interface WeeklyProgress { weekNumber: number; completedSessions: number; notes: string; updatedAt: string; }
-interface Client { id: string; name: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender: Gender; sessionDuration: SessionDuration; trainingLocation: TrainingLocation; bodyweightKg?: number; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }
+interface Client { id: string; name: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender: Gender; sessionDuration: SessionDuration; trainingLocation: TrainingLocation; bodyweightKg?: number; email?: string; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }
 interface ApiClientDashboard { client: { id: string; name?: string; email?: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender?: Gender; sessionDuration?: number; trainingLocation?: TrainingLocation; bodyweightKg?: number; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; }
 
 /* ===================================================================
