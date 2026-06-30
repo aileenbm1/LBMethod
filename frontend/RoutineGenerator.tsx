@@ -5,6 +5,7 @@ import { fetchExerciseGif, preloadExerciseGifs } from "./src/exerciseGifs";
 import { PortalTabBar } from "./components/portal/PortalTabs";
 import { RoutinesTab } from "./components/portal/RoutinesTab";
 import { AvanceCharts } from "./components/portal/AvanceCharts";
+import { WhyThisRoutine } from "./components/portal/WhyThisRoutine";
 
 /* ===================================================================
    TYPES
@@ -4006,6 +4007,7 @@ function ClientProgramView({program,routineId,clientLevel,clientLocation,swapTar
   const weeksToShow=allSame?[program.weeks[0]]:program.weeks;
   return(
     <div className="flex flex-col gap-3.5">
+      <WhyThisRoutine program={program} goalLabel={GOAL_LABELS[program.goal]} levelLabel={LEVEL_LABELS[program.level]}/>
       {weeksToShow.map((week,idx)=>(
         <article key={week.weekNumber} className="rounded-2xl border border-[#e7e1d6] bg-white p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
