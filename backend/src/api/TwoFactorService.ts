@@ -111,7 +111,7 @@ export function isClientLocked(identifier: string): { locked: boolean; lockedUnt
   return { locked: true, lockedUntil: rec.lockedUntil };
 }
 
-export function clearasesoradattempts(identifier: string) {
+export function clearClientAttempts(identifier: string) {
   asesoradattempts.delete(identifier);
 }
 
