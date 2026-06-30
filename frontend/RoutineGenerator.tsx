@@ -3222,7 +3222,7 @@ export default function RoutineGenerator() {
                                     onApplySwap={applySwap}
                                     onCancelSwap={()=>{setSwapTarget(null);setSwapOptions([]);}}
                                     onShowExercise={setExerciseModal}
-                                    onDeleteRoutine={deleteRoutine}
+                                    onDeleteRoutine={authSession?.role==="coach"?deleteRoutine:undefined}
                                     gifMap={gifMap}
                                   />
                                 </div>
