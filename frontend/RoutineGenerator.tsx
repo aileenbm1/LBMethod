@@ -642,7 +642,10 @@ export default function RoutineGenerator() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("coach");
-  const [clientRoutines, setClientRoutines] = useState<Array<{id:string;createdAt:string;goal:string}>>([]);
+  const [clientRoutines, setClientRoutines] = useState<Array<{id:string;createdAt:string;goal:string;weekNumber?:number}>>([]);
+  const [expandedRoutineId, setExpandedRoutineId] = useState<string|null>(null);
+  const [routineCache, setRoutineCache] = useState<Record<string,Program>>({});
+  const [routineLoading, setRoutineLoading] = useState<string|null>(null);
   const [progressWeek, setProgressWeek] = useState(1);
   const [completedSessions, setCompletedSessions] = useState(0);
   const [progressNotes, setProgressNotes] = useState("");
@@ -1098,7 +1101,7 @@ export default function RoutineGenerator() {
       try{
         const res=await apiFetch(`/usuario/${portalClientId}/routines`);
         if(!res.ok)return;
-        const data=await res.json() as {routines:Array<{id:string;createdAt:string;goal:string}>};
+        const data=await res.json() as {routines:Array<{id:string;createdAt:string;goal:string;weekNumber?:number}>};
         setClientRoutines(data.routines);
       }catch(e){}
     })();
@@ -1522,8 +1525,110 @@ export default function RoutineGenerator() {
     try{
       const res=await apiFetch(`/routine/${routineId}`,{method:"DELETE"});
       if(!res.ok)throw new Error("Error al eliminar rutina");
+      setExpandedRoutineId(prev=>prev===routineId?null:prev);
+      setClientRoutines(prev=>prev.filter(r=>r.id!==routineId));
       await refreshClients();
     }catch(e){setError(e instanceof Error?e.message:"Error al eliminar rutina");}
+  }
+
+  /* Un mesociclo dura 4 semanas (28 días) desde que se generó la rutina.
+     Pasado ese plazo ya no se puede editar, solo descargar o eliminar. */
+  function mesocycleFinished(createdAt:string){
+    const start=new Date(createdAt).getTime();
+    if(isNaN(start))return false;
+    return (Date.now()-start)/86400000>=28;
+  }
+
+  async function fetchRoutineProgram(id:string):Promise<Program|undefined>{
+    if(routineCache[id])return routineCache[id];
+    setRoutineLoading(id);
+    try{
+      const res=await apiFetch(`/routine/${id}`);
+      if(res.ok){const d=await res.json() as {program:Program};setRoutineCache(prev=>({...prev,[id]:d.program}));return d.program;}
+    }catch(e){}finally{setRoutineLoading(null);}
+    return undefined;
+  }
+
+  async function toggleRoutine(id:string){
+    if(expandedRoutineId===id){setExpandedRoutineId(null);return;}
+    setExpandedRoutineId(id);
+    await fetchRoutineProgram(id);
+  }
+
+  async function downloadRoutine(id:string){
+    const program=await fetchRoutineProgram(id);
+    const client=clients.find(c=>c.id===portalClientId);
+    if(program&&client)downloadPdf(client,program);
+  }
+
+  async function editRoutine(id:string){
+    const program=await fetchRoutineProgram(id);
+    if(!program||!portalClientId)return;
+    setSelectedClientId(portalClientId);
+    setFlowProgram(program);
+    setCoachStep(3);
+  }
+
+  /* Lista de rutinas generadas (acordeón + botones con la regla del mesociclo).
+     Reutilizada en Portal y en Asesorados → tab Rutinas. */
+  function renderRoutineHistory(){
+    if(clientRoutines.length===0){
+      return (
+        <div className="rounded-lg border border-dashed border-[#d8cdb8] bg-white p-8 text-center">
+          <p className="text-[14px] text-[#8c8377]">No hay rutinas generadas aún</p>
+          <p className="text-[12px] text-[#a39a8d] mt-2">Crea una nueva rutina para este cliente</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {clientRoutines.map((routine, idx) => {
+          const expanded=expandedRoutineId===routine.id;
+          const finished=mesocycleFinished(routine.createdAt);
+          const prog=routineCache[routine.id];
+          return (
+          <div key={routine.id} className={`rounded-lg border bg-white overflow-hidden shadow-sm transition ${expanded?'border-[#a87d49]':'border-[#e7e1d6]'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4">
+              <button onClick={()=>toggleRoutine(routine.id)} className="flex flex-1 items-center gap-3 text-left">
+                <span className={`flex-none text-[#a87d49] text-[12px] transition-transform ${expanded?'rotate-90':''}`}>▶</span>
+                <span className="flex-1">
+                  <span className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-[14px] font-bold text-[#a87d49]">#{clientRoutines.length - idx}</span>
+                    <span className="text-[12px] text-[#8c8377]">{new Date(routine.createdAt).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})}</span>
+                    {idx===0 && <span className="rounded-full bg-[#eaf3e6] px-2 py-0.5 text-[10px] font-semibold text-[#5f7a4f]">Actual</span>}
+                    {finished
+                      ? <span className="rounded-full bg-[#f0e7d8] px-2 py-0.5 text-[10px] font-semibold text-[#8f6a3c]">Mesociclo cerrado</span>
+                      : <span className="rounded-full bg-[#eef3f7] px-2 py-0.5 text-[10px] font-semibold text-[#4a6a86]">En curso</span>}
+                  </span>
+                  <span className="block text-[12px] text-[#8c8377] mt-1 capitalize">{routine.goal.replace(/_/g, ' ')}</span>
+                </span>
+              </button>
+              <div className="flex gap-2 sm:flex-nowrap">
+                <button onClick={()=>downloadRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49] hover:text-[#17120d] px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">↓ Descargar</button>
+                {!finished && (
+                  <button onClick={()=>editRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">Editar</button>
+                )}
+                <button onClick={()=>deleteRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">Eliminar</button>
+              </div>
+            </div>
+            {expanded && (
+              <div className="border-t border-[#ece6db] bg-[#faf8f4] p-4">
+                {routineLoading===routine.id && !prog
+                  ? <p className="text-[12px] text-[#8c8377] text-center py-4">Cargando rutina…</p>
+                  : prog
+                    ? <RoutineSummary program={prog}/>
+                    : <p className="text-[12px] text-[#8c8377] text-center py-4">No se pudo cargar la rutina.</p>}
+                {!finished && (
+                  <p className="mt-3 text-[11px] text-[#a39a8d] flex items-center gap-1.5">
+                    <span>✏️</span> Editable hasta cerrar el mesociclo (4 semanas desde su creación).
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        );})}
+      </div>
+    );
   }
 
   async function saveProgress(){
@@ -2749,9 +2854,18 @@ export default function RoutineGenerator() {
 
                 {/* ========== RUTINAS ========== */}
                 {clientDetailTab==="rutinas" && (<>
-                {/* Historial de mesociclos */}
+                {/* Rutinas generadas — acordeón con descargar / editar / eliminar */}
                 <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
-                  <h3 className="font-display text-[18px] font-semibold mb-4">Historial de rutinas</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-display text-[18px] font-semibold">Rutinas generadas</h3>
+                    <span className="text-[12px] text-[#8c8377]">{clientRoutines.length} rutina{clientRoutines.length!==1?'s':''}</span>
+                  </div>
+                  {renderRoutineHistory()}
+                </article>
+
+                {/* Seguimiento por mesociclos */}
+                <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                  <h3 className="font-display text-[18px] font-semibold mb-4">Seguimiento por mesociclos</h3>
                   <RoutinesTab progress={selectedClient.progress} daysPerWeek={selectedClient.daysPerWeek} groupProgressByMesocycles={groupProgressByMesocycles}/>
                 </article>
 
@@ -3080,34 +3194,7 @@ export default function RoutineGenerator() {
                           <p className="text-[12px] text-[#8c8377] mt-1">{clientRoutines.length} rutina{clientRoutines.length!==1?'s':''}</p>
                         </div>
                       </div>
-                      {clientRoutines.length===0?(
-                        <div className="rounded-lg border border-dashed border-[#d8cdb8] bg-white p-8 text-center">
-                          <p className="text-[14px] text-[#8c8377]">No hay rutinas generadas aún</p>
-                          <p className="text-[12px] text-[#a39a8d] mt-2">Crea una nueva rutina para este cliente</p>
-                        </div>
-                      ):(
-                        <div className="space-y-3">
-                          {clientRoutines.map((routine, idx) => (
-                            <div key={routine.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-lg border border-[#e7e1d6] bg-white p-4 hover:bg-[#faf8f4] hover:border-[#a87d49] transition shadow-sm">
-                              <div className="flex-1">
-                                <div className="flex items-baseline gap-2">
-                                  <p className="text-[14px] font-bold text-[#a87d49]">#{clientRoutines.length - idx}</p>
-                                  <p className="text-[12px] text-[#8c8377]">{new Date(routine.createdAt).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})}</p>
-                                </div>
-                                <p className="text-[12px] text-[#8c8377] mt-2 capitalize">{routine.goal.replace(/_/g, ' ')}</p>
-                              </div>
-                              <div className="flex gap-2 sm:flex-nowrap">
-                                <button onClick={() => {setSelectedClientId(portalClientId!); setFlowProgram(portalClient.program); setCoachStep(3);}} className="flex-1 sm:flex-none rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-5 py-2 text-[12px] font-semibold transition whitespace-nowrap">
-                                  Ver
-                                </button>
-                                <button onClick={() => deleteRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-5 py-2 text-[12px] font-semibold transition whitespace-nowrap">
-                                  Eliminar
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {renderRoutineHistory()}
                     </div>
                   )}
 
@@ -4022,6 +4109,50 @@ export default function RoutineGenerator() {
 /* ===================================================================
    PROGRAM VIEW
    =================================================================== */
+/* ===================================================================
+   ROUTINE SUMMARY — vista compacta de solo lectura para el historial
+   =================================================================== */
+function RoutineSummary({program}:{program:Program}){
+  const allSame=program.weeks.length>1&&program.weeks.slice(1).every(w=>weekEq(w,program.weeks[0]));
+  const weeksToShow=allSame?[program.weeks[0]]:program.weeks;
+  return(
+    <div className="flex flex-col gap-3">
+      <WhyThisRoutine program={program} goalLabel={GOAL_LABELS[program.goal]} levelLabel={LEVEL_LABELS[program.level]}/>
+      {weeksToShow.map(week=>(
+        <div key={week.weekNumber} className="rounded-xl border border-[#e7e1d6] bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span className="text-[13px] font-bold text-[#17120d]">{allSame?`Mes 1 · ${program.weeks.length} semanas`:`Semana ${week.weekNumber}`}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8c8377]">{allSame?`RIR progresivo sem 1–${program.weeks.length}`:week.deload?"Deload · descarga":`RIR ${week.rir}`}</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {week.days.map(day=>(
+              <div key={day.dayIndex} className="rounded-lg border border-[#ece6db] bg-[#faf8f4] p-3">
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#a87d49]">Día {day.dayIndex+1}</span>
+                  <span className="text-[12px] font-semibold capitalize text-[#3a342c]">{FOCUS_LABELS[day.focus]??day.focus.replace(/_/g," ")}</span>
+                  <span className="ml-auto text-[10px] text-[#a39a8d]">{day.totalSets} series</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {day.selections.map((sel,i)=>{
+                    const tag=ROLE_TAG[sel.role]??{label:sel.role,cls:"bg-[#efece5] text-[#8c8377]"};
+                    return(
+                      <div key={`${sel.exercise.name}-${i}`} className="flex items-center gap-2">
+                        <span className={`flex-none rounded px-1.5 py-[2px] text-[8.5px] font-semibold uppercase tracking-[0.05em] ${tag.cls}`}>{tag.label}</span>
+                        <span className="flex-1 text-[12.5px] text-[#28231c]">{tx(sel.exercise.name)}</span>
+                        <span className="whitespace-nowrap text-[10.5px] tabular-nums text-[#a39a8d]">{sel.sets}×{sel.repsMin}-{sel.repsMax} · RIR {sel.rir}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ===================================================================
    CLIENT PROGRAM VIEW — igual que ProgramView pero con botón de cambiar ejercicio
    =================================================================== */

@@ -13,8 +13,10 @@ import type {
   GeneratedDay,
   GeneratedProgram,
   GeneratedRoutine,
+  ProgressionWeek,
   SelectedExercise,
   UserProfile,
+  VolumePlan,
 } from "../../types";
 import { HOME_EQUIPMENT, SESSION_MAX_EXERCISES } from "../../types";
 import { VolumeCalculator } from "../calculators/VolumeCalculator";
@@ -106,16 +108,11 @@ export class LBMethodEngine {
     });
     weeks.push(templateRoutine);
 
-    // Weeks 2-4 use the same exercises as week 1, only RIR/technique/volume changes
+    // Weeks 2-N reuse week 1's EXACT exercises. Only RIR, deload flag and (on a
+    // deload week) the set volume change — never the exercise selection. This is
+    // the whole point of a mesocycle: same plan, progressive intensity.
     for (let week = 2; week <= totalWeeks; week++) {
-      const routine = this.generateRoutine(user, library, {
-        ...options,
-        weekNumber: week,
-        usedSignatures: [templateRoutine.signature], // Only enforce week 1's exercises
-        seed: options.seed ? options.seed + week : undefined, // Deterministic but slightly varied
-        volumeBias: options.volumeBias,
-      });
-      weeks.push(routine);
+      weeks.push(this.deriveWeek(templateRoutine, user, this.progression.forWeek(week)));
     }
 
     return {
@@ -133,6 +130,60 @@ export class LBMethodEngine {
   }
 
   // ---- internals ----------------------------------------------------------
+
+  /**
+   * Build a later week of the mesocycle from the week-1 template. Keeps the
+   * exact same exercises, order and training methods; only updates RIR, the
+   * deload flag and — on a deload week — scales the set count down by the
+   * week's volume multiplier. This guarantees the routine does NOT change from
+   * week to week; the only thing that progresses is intensity.
+   */
+  private deriveWeek(
+    template: GeneratedRoutine,
+    user: UserProfile,
+    prog: ProgressionWeek,
+  ): GeneratedRoutine {
+    const effectiveRir = user.goal === "general_health" ? Math.min(prog.rir + 1, 5) : prog.rir;
+    const scale = prog.volumeMultiplier;
+
+    const days: GeneratedDay[] = template.days.map((day) => {
+      const selections: SelectedExercise[] = day.selections.map((s) => ({
+        ...s,
+        sets: scale === 1 ? s.sets : Math.max(1, Math.round(s.sets * scale)),
+        rir: effectiveRir,
+      }));
+      return {
+        dayIndex: day.dayIndex,
+        focus: day.focus,
+        selections,
+        sessionFatigue: this.fatigue.sessionFatigue(selections),
+        totalSets: selections.reduce((sum, s) => sum + s.sets, 0),
+      };
+    });
+
+    const volume: VolumePlan =
+      scale === 1
+        ? { ...template.volume }
+        : {
+            ...template.volume,
+            weeklyGluteSets: Math.round(template.volume.weeklyGluteSets * scale),
+            weeklyQuadSets: Math.round(template.volume.weeklyQuadSets * scale),
+            weeklyHamstringSets: Math.round(template.volume.weeklyHamstringSets * scale),
+            weeklyUpperSets: Math.round(template.volume.weeklyUpperSets * scale),
+          };
+
+    return {
+      goal: template.goal,
+      level: template.level,
+      daysPerWeek: template.daysPerWeek,
+      weekNumber: prog.week,
+      rir: prog.rir,
+      deload: prog.deload,
+      volume,
+      days,
+      signature: signatureFor(days),
+    };
+  }
 
   private buildRoutine(
     user: UserProfile,
