@@ -3002,8 +3002,10 @@ export default function RoutineGenerator() {
                     </div>
                   )}
 
-                  {/* Portal sub-tabs */}
-                  <PortalTabBar activeTab={portalTab} onTabChange={setPortalTab} isCoach={authSession?.role==="coach"} />
+                  {/* Portal sub-tabs - ONLY for coaches */}
+                  {authSession?.role==="coach" && (
+                    <PortalTabBar activeTab={portalTab} onTabChange={setPortalTab} isCoach={true} />
+                  )}
 
                   {/* Mi entrenamiento — vista diaria + registro fusionados */}
                   {portalTab==="rutina" && (
