@@ -2966,7 +2966,7 @@ export default function RoutineGenerator() {
                               <p className="text-[11px] text-[#8c8377] mt-0.5">{new Date(routine.createdAt).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})} · {routine.goal.replace(/_/g, ' ')}</p>
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={() => {setSelectedClientId(portalClientId); setFlowProgram(portalClient.program); setCoachStep(3);}} className="rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-3 py-1.5 text-[11px] font-semibold transition">
+                              <button onClick={() => {setSelectedClientId(portalClientId!); setFlowProgram(portalClient.program); setCoachStep(3);}} className="rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-3 py-1.5 text-[11px] font-semibold transition">
                                 Ver
                               </button>
                               <button onClick={() => deleteRoutine(routine.id)} className="rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 text-[11px] font-semibold transition">
