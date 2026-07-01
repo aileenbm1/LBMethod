@@ -833,11 +833,25 @@ export function buildRouter(service: RoutineService): Router {
 
   router.get("/usuario/:clientId/routines", requireRole("coach"), async (req, res, next) => {
     try {
-      const routines = await prisma.routine.findMany({
-        where: { userId: req.params.clientId },
-        select: { id: true, weekNumber: true, createdAt: true, goal: true },
+      // Las rutinas viven en la tabla Workout (registros `routine:<id>`),
+      // no en la tabla Routine (que nunca se llena). Filtramos por clientId
+      // guardado dentro del payload JSON.
+      const rows = await prisma.workout.findMany({
+        where: {
+          name: { startsWith: "routine:" },
+          payload: { path: ["clientId"], equals: req.params.clientId },
+        },
+        select: { goal: true, totalWeeks: true, createdAt: true, payload: true },
         orderBy: { createdAt: "desc" },
       });
+      const routines = rows
+        .map((r) => ({
+          id: (r.payload as any)?.routineId as string | undefined,
+          createdAt: r.createdAt.toISOString(),
+          goal: r.goal,
+          weekNumber: r.totalWeeks,
+        }))
+        .filter((r) => !!r.id);
       res.json({ routines });
     } catch (err) {
       next(err);
@@ -861,9 +875,20 @@ export function buildRouter(service: RoutineService): Router {
   router.delete("/routine/:id", requireRole("coach"), async (req, res, next) => {
     try {
       const routineId = req.params.id;
-      const routine = await prisma.routine.findUnique({ where: { id: routineId } });
-      if (!routine) return res.status(404).json({ error: "RoutineNotFound" });
-      await prisma.routine.delete({ where: { id: routineId } });
+      const row = await prisma.workout.findFirst({ where: { name: `routine:${routineId}` } });
+      if (!row) return res.status(404).json({ error: "RoutineNotFound" });
+      const clientId = (row.payload as any)?.clientId as string | undefined;
+      await prisma.workout.deleteMany({ where: { name: `routine:${routineId}` } });
+      // Si era la rutina activa de la clienta, quitamos también el puntero activo.
+      if (clientId) {
+        const active = await prisma.workout.findFirst({
+          where: { name: `client:${clientId}:active` },
+          orderBy: { createdAt: "desc" },
+        });
+        if (active && (active.payload as any)?.routineId === routineId) {
+          await prisma.workout.delete({ where: { id: active.id } });
+        }
+      }
       res.json({ ok: true });
     } catch (err) {
       next(err);
