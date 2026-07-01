@@ -1514,7 +1514,7 @@ export default function RoutineGenerator() {
   async function handleSetPin(){
     if(!flowClient)return;
     const pin=clientPin.trim();
-    if(!/^\d{4,8}$/.test(pin)){setError("El PIN debe tener 4-8 dígitos numéricos.");return;}
+    if(!/^\S{6,12}$/.test(pin)){setError("El PIN debe tener entre 6 y 12 caracteres (letras, números o símbolos).");return;}
     try{
       await apiFetch(`/usuario/${flowClient.id}/pin`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin})});
       setPinSaved(true);setTimeout(()=>setPinSaved(false),3000);setError(null);
@@ -2546,17 +2546,23 @@ export default function RoutineGenerator() {
 
                 {/* PIN — muestra el existente o el recién generado */}
                 {(()=>{
-                  const displayPin = generatedPin || clientPin || flowClient.pin;
+                  // Un PIN hasheado con bcrypt (irreversible) no se puede mostrar.
+                  const looksHashed = (p?:string|null)=> !!p && (p.startsWith("$2") || p.length>12);
+                  const storedPin = looksHashed(flowClient.pin) ? undefined : flowClient.pin;
+                  const displayPin = generatedPin || clientPin || storedPin;
                   const isNew = !!(generatedPin || clientPin);
+                  const pinConfigured = !displayPin && looksHashed(flowClient.pin);
                   return (
                     <div className="mt-6 rounded-2xl bg-[#17120d] p-6 text-center text-[#f4f1ea]">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#a87d49]">
-                        {isNew ? "PIN generado automáticamente" : "PIN de acceso actual"}
+                        {isNew ? "PIN generado automáticamente" : pinConfigured ? "PIN ya configurado" : "PIN de acceso actual"}
                       </div>
                       <div className="mt-3 font-mono text-[42px] font-bold tracking-[0.18em] leading-none">
-                        {displayPin ?? "——"}
+                        {displayPin ?? (pinConfigured ? "••••••" : "——")}
                       </div>
-                      <p className="mt-2 text-[11px] text-[#9a9186]">Comparte este PIN con {flowClient.name} para que pueda entrar a la app.</p>
+                      {pinConfigured
+                        ? <p className="mt-2 text-[11px] text-[#9a9186]">Por seguridad, el PIN no se puede mostrar. Si {flowClient.name} lo olvidó, genera uno nuevo abajo en <strong>«Cambiar PIN manualmente»</strong>.</p>
+                        : <p className="mt-2 text-[11px] text-[#9a9186]">Comparte este PIN con {flowClient.name} para que pueda entrar a la app.</p>}
                       {displayPin && (
                         <button
                           onClick={()=>copyPin(displayPin)}
@@ -2615,7 +2621,7 @@ export default function RoutineGenerator() {
                   <ol className="mt-3 space-y-2 text-[13px] text-[#7a6a52]">
                     <li>1. Abre la app LB Method y toca <strong>«Asesorado»</strong>.</li>
                     <li>2. Ingresa tu correo, nombre o ID: <strong className="font-mono text-[#8f6a3c]">{flowClient.name}</strong></li>
-                    <li>3. Ingresa tu PIN: <strong className="font-mono text-[#8f6a3c]">{generatedPin||clientPin||flowClient.pin||"(ver arriba)"}</strong></li>
+                    <li>3. Ingresa tu PIN: <strong className="font-mono text-[#8f6a3c]">{generatedPin||clientPin||(flowClient.pin&&!flowClient.pin.startsWith("$2")&&flowClient.pin.length<=12?flowClient.pin:"(ver arriba)")}</strong></li>
                     <li>4. ¡Listo! Verás tu rutina, podrás registrar tus pesos y chatear con tu coach.</li>
                   </ol>
                 </div>

@@ -128,7 +128,9 @@ export class RoutineService {
       gender: (user.gender as Gender) ?? "unspecified",
       sessionDuration: (user.sessionDuration as SessionDuration) ?? 60,
       trainingLocation: (user.trainingLocation as TrainingLocation) ?? "gym",
-      pin: user.pin ?? undefined,
+      // Solo exponer el PIN si está en texto plano (clientes recién creados).
+      // Los PINs hasheados con bcrypt ($2a/$2b) son irreversibles y no deben salir del backend.
+      pin: user.pin && !user.pin.startsWith("$2") ? user.pin : undefined,
       bodyweightKg: user.bodyweightKg ?? undefined,
       age: (user as any).age ?? undefined,
       monthsTrained: (user as any).monthsTrained ?? undefined,
