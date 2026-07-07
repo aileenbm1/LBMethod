@@ -81,8 +81,8 @@ interface Day { dayIndex: number; focus: string; sessionFatigue: number; totalSe
 interface Week { weekNumber: number; rir: number; deload: boolean; volume: { weeklyGluteSets: number; lowerVolumePct: number; upperVolumePct: number; gluteFrequency: number; }; days: Day[]; }
 interface Program { goal: Goal; level: Level; daysPerWeek: number; weeks: Week[]; }
 interface WeeklyProgress { weekNumber: number; completedSessions: number; notes: string; updatedAt: string; }
-interface Client { id: string; name: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender: Gender; sessionDuration: SessionDuration; trainingLocation: TrainingLocation; bodyweightKg?: number; email?: string; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }
-interface ApiClientDashboard { client: { id: string; name?: string; email?: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender?: Gender; sessionDuration?: number; trainingLocation?: TrainingLocation; bodyweightKg?: number; pin?: string; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; }
+interface Client { id: string; name: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender: Gender; sessionDuration: SessionDuration; trainingLocation: TrainingLocation; bodyweightKg?: number; email?: string; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; pin?: string; pinSet?: boolean; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }
+interface ApiClientDashboard { client: { id: string; name?: string; email?: string; goal: Goal; experienceLevel: Level; daysPerWeek: number; gender?: Gender; sessionDuration?: number; trainingLocation?: TrainingLocation; bodyweightKg?: number; pin?: string; pinSet?: boolean; weakPoints?: WeakPoint[]; limitations?: Limitation[]; }; routineId: string|null; program: Program|null; progress: WeeklyProgress[]; }
 
 /* ===================================================================
    CONSTANTS
@@ -216,7 +216,7 @@ const ghostBtn = "rounded-xl border border-[#e0d9cc] font-semibold text-[#8c8377
 
 function initials(n:string){return n.split(" ").map(p=>p[0]).filter(Boolean).slice(0,2).join("").toUpperCase();}
 function fdt(iso:string){const d=new Date(iso);if(isNaN(d.getTime()))return"N/A";return new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(d);}
-function mapApiClient(p:ApiClientDashboard):Client{return{id:p.client.id,name:p.client.name?.trim()||p.client.email||"Asesorado",goal:p.client.goal,experienceLevel:p.client.experienceLevel,daysPerWeek:p.client.daysPerWeek,gender:(p.client.gender??"unspecified") as Gender,sessionDuration:([45,60,75,90].includes(p.client.sessionDuration??0)?p.client.sessionDuration:60) as SessionDuration,trainingLocation:p.client.trainingLocation??"gym",bodyweightKg:p.client.bodyweightKg,pin:p.client.pin,routineId:p.routineId,program:p.program,progress:p.progress??[],weakPoints:p.client.weakPoints??[],limitations:p.client.limitations??[]};}
+function mapApiClient(p:ApiClientDashboard):Client{return{id:p.client.id,name:p.client.name?.trim()||p.client.email||"Asesorado",goal:p.client.goal,experienceLevel:p.client.experienceLevel,daysPerWeek:p.client.daysPerWeek,gender:(p.client.gender??"unspecified") as Gender,sessionDuration:([45,60,75,90].includes(p.client.sessionDuration??0)?p.client.sessionDuration:60) as SessionDuration,trainingLocation:p.client.trainingLocation??"gym",bodyweightKg:p.client.bodyweightKg,pin:p.client.pin,pinSet:p.client.pinSet,routineId:p.routineId,program:p.program,progress:p.progress??[],weakPoints:p.client.weakPoints??[],limitations:p.client.limitations??[]};}
 function adherence(c:Client){const w=c.program?.weeks??[];if(!w.length)return 0;const mx=w.length*c.daysPerWeek;const done=c.progress.reduce((s,i)=>s+i.completedSessions,0);return Math.min(100,Math.round(done/mx*100));}
 interface Mesocycle{num:number;weeks:WeeklyProgress[];status:'closed'|'active'|'upcoming';completedSessions:number;totalSessions:number;}
 function groupProgressByMesocycles(progress:WeeklyProgress[],daysPerWeek:number):Mesocycle[]{const mesocycles:Map<number,WeeklyProgress[]>=new Map();for(const p of progress){const mesoNum=Math.ceil(p.weekNumber/4);if(!mesocycles.has(mesoNum))mesocycles.set(mesoNum,[]);mesocycles.get(mesoNum)!.push(p);}const maxWeek=progress.length>0?Math.max(...progress.map(p=>p.weekNumber)):0;const result:Mesocycle[]=[];for(let i=1;i<=4;i++){const weeks=mesocycles.get(i)||[];const firstWeek=(i-1)*4+1;const lastWeek=i*4;let status:'closed'|'active'|'upcoming'='upcoming';if(maxWeek>=lastWeek)status='closed';else if(maxWeek>=firstWeek)status='active';const completed=weeks.reduce((s,w)=>s+w.completedSessions,0);let total=daysPerWeek*4;if(maxWeek>0&&maxWeek<firstWeek)total=0;else if(maxWeek>=firstWeek&&maxWeek<lastWeek)total=(maxWeek-firstWeek+1)*daysPerWeek;result.push({num:i,weeks,status,completedSessions:completed,totalSessions:total});}return result;}
@@ -1521,6 +1521,23 @@ export default function RoutineGenerator() {
     }catch(e){setError(e instanceof Error?e.message:"Error al guardar PIN");}
   }
 
+  // Genera un PIN aleatorio de 8 caracteres (letras, números y un símbolo), lo guarda y lo muestra.
+  async function handleGeneratePin(){
+    if(!flowClient)return;
+    const letters="ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+    const digits="23456789";
+    const symbols="@#$%&*";
+    const all=letters+digits+symbols;
+    const pick=(s:string)=>s[Math.floor(Math.random()*s.length)];
+    const chars=[pick(letters),pick(digits),pick(symbols),...Array.from({length:5},()=>pick(all))];
+    for(let i=chars.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[chars[i],chars[j]]=[chars[j],chars[i]];}
+    const pin=chars.join("");
+    try{
+      await apiFetch(`/usuario/${flowClient.id}/pin`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin})});
+      setClientPin(pin);setPinSaved(true);setTimeout(()=>setPinSaved(false),3000);setError(null);
+    }catch(e){setError(e instanceof Error?e.message:"Error al generar PIN");}
+  }
+
   async function deleteRoutine(routineId:string){
     if(!confirm("¿Seguro que quieres eliminar esta rutina?"))return;
     try{
@@ -2551,26 +2568,38 @@ export default function RoutineGenerator() {
                   const storedPin = looksHashed(flowClient.pin) ? undefined : flowClient.pin;
                   const displayPin = generatedPin || clientPin || storedPin;
                   const isNew = !!(generatedPin || clientPin);
-                  const pinConfigured = !displayPin && looksHashed(flowClient.pin);
+                  // El backend no envía el hash, pero sí marca pinSet cuando hay PIN configurado.
+                  const pinConfigured = !displayPin && (flowClient.pinSet || looksHashed(flowClient.pin));
+                  // Cuentas viejas (creadas antes del PIN automático) pueden no tener PIN alguno.
+                  const pinMissing = !displayPin && !pinConfigured;
                   return (
                     <div className="mt-6 rounded-2xl bg-[#17120d] p-6 text-center text-[#f4f1ea]">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#a87d49]">
-                        {isNew ? "PIN generado automáticamente" : pinConfigured ? "PIN ya configurado" : "PIN de acceso actual"}
+                        {isNew ? "PIN generado automáticamente" : pinConfigured ? "PIN ya configurado" : pinMissing ? "Sin PIN configurado" : "PIN de acceso actual"}
                       </div>
                       <div className="mt-3 font-mono text-[42px] font-bold tracking-[0.18em] leading-none">
                         {displayPin ?? (pinConfigured ? "••••••" : "——")}
                       </div>
                       {pinConfigured
-                        ? <p className="mt-2 text-[11px] text-[#9a9186]">Por seguridad, el PIN no se puede mostrar. Si {flowClient.name} lo olvidó, genera uno nuevo abajo en <strong>«Cambiar PIN manualmente»</strong>.</p>
+                        ? <p className="mt-2 text-[11px] text-[#9a9186]">Por seguridad, el PIN no se puede mostrar. Si {flowClient.name} lo olvidó, genera uno nuevo con el botón de abajo.</p>
+                        : pinMissing
+                        ? <p className="mt-2 text-[11px] text-[#9a9186]">{flowClient.name} todavía no tiene PIN y no puede entrar a la app. Genera uno con el botón de abajo.</p>
                         : <p className="mt-2 text-[11px] text-[#9a9186]">Comparte este PIN con {flowClient.name} para que pueda entrar a la app.</p>}
-                      {displayPin && (
-                        <button
-                          onClick={()=>copyPin(displayPin)}
-                          className={`mt-4 rounded-xl px-6 py-2.5 text-sm font-semibold transition ${copiedPin?"bg-[#4caf50] text-white":"bg-white/10 text-white hover:bg-white/20"}`}
-                        >
-                          {copiedPin ? "✓ PIN copiado" : "Copiar PIN"}
-                        </button>
-                      )}
+                      {displayPin
+                        ? <button
+                            onClick={()=>copyPin(displayPin)}
+                            className={`mt-4 rounded-xl px-6 py-2.5 text-sm font-semibold transition ${copiedPin?"bg-[#4caf50] text-white":"bg-white/10 text-white hover:bg-white/20"}`}
+                          >
+                            {copiedPin ? "✓ PIN copiado" : "Copiar PIN"}
+                          </button>
+                        : (pinConfigured || pinMissing) && (
+                          <button
+                            onClick={handleGeneratePin}
+                            className="mt-4 rounded-xl bg-[#a87d49] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#946b3c]"
+                          >
+                            {pinMissing ? "Generar PIN" : "Generar PIN nuevo"}
+                          </button>
+                        )}
                     </div>
                   );
                 })()}

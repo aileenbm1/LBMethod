@@ -37,6 +37,8 @@ import type { RoutineDayEdit } from "./validation";
 export interface StoredClient extends UserProfile {
   id: string;
   pin?: string;
+  /** True si la cuenta tiene un PIN configurado (aunque esté hasheado y no se pueda mostrar). */
+  pinSet?: boolean;
   createdAt: string;
 }
 
@@ -131,6 +133,8 @@ export class RoutineService {
       // Solo exponer el PIN si está en texto plano (clientes recién creados).
       // Los PINs hasheados con bcrypt ($2a/$2b) son irreversibles y no deben salir del backend.
       pin: user.pin && !user.pin.startsWith("$2") ? user.pin : undefined,
+      // Indica si hay PIN configurado (incluso hasheado) sin revelarlo.
+      pinSet: !!user.pin,
       bodyweightKg: user.bodyweightKg ?? undefined,
       age: (user as any).age ?? undefined,
       monthsTrained: (user as any).monthsTrained ?? undefined,
