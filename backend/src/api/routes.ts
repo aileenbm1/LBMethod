@@ -166,12 +166,10 @@ export function buildRouter(service: RoutineService): Router {
           message: "Esta cuenta no tiene PIN de acceso. Pide a tu coach que configure tu acceso.",
         });
       }
-      // Comparar PIN: soporta hashes bcrypt (nuevos) y texto plano (migración automática)
+      // Comparar PIN: soporta cifrado reversible (actual), texto plano y hash bcrypt (legado),
+      // migrando automáticamente al formato reversible cuando corresponde.
       const enteredPin = parsed.data.pin ?? "";
-      const isHashed = storedPin.startsWith("$2b$") || storedPin.startsWith("$2a$");
-      const pinValid = isHashed
-        ? await bcrypt.compare(enteredPin, storedPin)
-        : enteredPin === storedPin;
+      const pinValid = await service.verifyClientPin(usuario.id, storedPin, enteredPin);
 
       if (!enteredPin || !pinValid) {
         const lockResult = recordClientFailedAttempt(identifier);
@@ -181,10 +179,6 @@ export function buildRouter(service: RoutineService): Router {
         return res.status(401).json({ error: "InvalidPin", message: "PIN incorrecto." });
       }
 
-      // Migración automática: si el PIN era texto plano, lo hasheamos ahora
-      if (!isHashed) {
-        await service.setClientPin(usuario.id, enteredPin);
-      }
       clearClientAttempts(identifier);
       const claims = {
         role: "client" as const,

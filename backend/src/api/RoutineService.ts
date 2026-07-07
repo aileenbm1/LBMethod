@@ -1,5 +1,36 @@
-import { createHash, randomUUID } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
+
+/**
+ * Cifrado reversible (AES-256-GCM) para el PIN de acceso de los asesorados.
+ * A diferencia de bcrypt, permite que el coach vuelva a ver el PIN vigente.
+ * La clave se deriva del mismo secreto usado para firmar JWTs.
+ */
+const PIN_ENC_PREFIX = "enc1:";
+const pinEncKey = createHash("sha256").update(process.env.JWT_SECRET ?? "lbmethod-dev-secret-change-me").digest();
+
+function encryptPin(plain: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", pinEncKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return PIN_ENC_PREFIX + Buffer.concat([iv, tag, ciphertext]).toString("base64");
+}
+
+function decryptPin(stored: string): string | null {
+  if (!stored.startsWith(PIN_ENC_PREFIX)) return null;
+  try {
+    const buf = Buffer.from(stored.slice(PIN_ENC_PREFIX.length), "base64");
+    const iv = buf.subarray(0, 12);
+    const tag = buf.subarray(12, 28);
+    const ciphertext = buf.subarray(28);
+    const decipher = createDecipheriv("aes-256-gcm", pinEncKey, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Genera un PIN aleatorio de 8 caracteres con letras, números y símbolos.
@@ -130,10 +161,11 @@ export class RoutineService {
       gender: (user.gender as Gender) ?? "unspecified",
       sessionDuration: (user.sessionDuration as SessionDuration) ?? 60,
       trainingLocation: (user.trainingLocation as TrainingLocation) ?? "gym",
-      // Solo exponer el PIN si está en texto plano (clientes recién creados).
-      // Los PINs hasheados con bcrypt ($2a/$2b) son irreversibles y no deben salir del backend.
-      pin: user.pin && !user.pin.startsWith("$2") ? user.pin : undefined,
-      // Indica si hay PIN configurado (incluso hasheado) sin revelarlo.
+      // Exponer el PIN vigente: cifrado reversible se desencripta, texto plano (legado) se muestra tal cual.
+      // Los PINs hasheados con bcrypt ($2a/$2b, legado previo al cifrado reversible) son irreversibles
+      // hasta que el asesorado vuelva a iniciar sesión y se migren automáticamente.
+      pin: user.pin?.startsWith(PIN_ENC_PREFIX) ? decryptPin(user.pin) ?? undefined : user.pin && !user.pin.startsWith("$2") ? user.pin : undefined,
+      // Indica si hay PIN configurado (incluso si no se pudo desencriptar) sin revelarlo.
       pinSet: !!user.pin,
       bodyweightKg: user.bodyweightKg ?? undefined,
       age: (user as any).age ?? undefined,
@@ -192,7 +224,7 @@ export class RoutineService {
           monthsTrained: input.monthsTrained,
           homeEquipment: input.homeEquipment ?? [],
           notes: input.notes,
-          pin,
+          pin: encryptPin(pin),
           heightCm: input.measurements?.heightCm,
           bodyFatPct: input.measurements?.bodyFatPct,
           hipCm: input.measurements?.hipCm,
@@ -746,9 +778,33 @@ export class RoutineService {
 
   async setClientPin(clientId: string, pin: string | null): Promise<void> {
     if (!this.prisma) return;
-    // Hashear el PIN con bcrypt antes de guardar
-    const hashed = pin ? await bcrypt.hash(pin, 12) : null;
-    await this.prisma.user.update({ where: { id: clientId }, data: { pin: hashed } });
+    // Cifrado reversible: permite que el coach vuelva a consultar el PIN vigente.
+    const stored = pin ? encryptPin(pin) : null;
+    await this.prisma.user.update({ where: { id: clientId }, data: { pin: stored } });
+  }
+
+  /**
+   * Valida el PIN ingresado contra el almacenado, soportando los tres formatos históricos:
+   * cifrado reversible (actual), texto plano y hash bcrypt (legado, irreversible).
+   * Si el formato no es el cifrado reversible y la validación es exitosa, migra el PIN
+   * al nuevo formato para que el coach pueda volver a consultarlo.
+   */
+  async verifyClientPin(clientId: string, storedPin: string, enteredPin: string): Promise<boolean> {
+    if (!enteredPin) return false;
+    const isBcryptHashed = storedPin.startsWith("$2b$") || storedPin.startsWith("$2a$");
+    if (isBcryptHashed) {
+      const valid = await bcrypt.compare(enteredPin, storedPin);
+      if (valid) await this.setClientPin(clientId, enteredPin);
+      return valid;
+    }
+    if (storedPin.startsWith(PIN_ENC_PREFIX)) {
+      const decrypted = decryptPin(storedPin);
+      return decrypted !== null && enteredPin === decrypted;
+    }
+    // Texto plano (legado, previo al cifrado reversible)
+    const valid = enteredPin === storedPin;
+    if (valid) await this.setClientPin(clientId, enteredPin);
+    return valid;
   }
 
   // ---- Registro de ejercicios ---------------------------------------------
