@@ -880,7 +880,10 @@ export default function RoutineGenerator() {
     if(exerciseLibrary.length>0)return;
     try{
       const res=await apiFetch("/exercise-library");
-      if(res.ok){const d=await res.json() as {exercises:LibraryExercise[]};setExerciseLibrary(d.exercises??[]);}
+      if(res.ok){
+        const d=await res.json() as {exercises:LibraryExercise[]};
+        setExerciseLibrary((d.exercises??[]).slice().sort((a,b)=>tx(a.name).localeCompare(tx(b.name),"es")));
+      }
     }catch{}
   }
 
@@ -990,7 +993,7 @@ export default function RoutineGenerator() {
     const n=name.trim();
     if(!n)return;
     const newEx:LibraryExercise={id:`local_${Date.now()}`,name:n,muscleGroup,primaryMuscle:muscleGroup,category:"strength",equipment:"machine",movementPattern:"custom"};
-    setExerciseLibrary(prev=>[...prev,newEx]);
+    setExerciseLibrary(prev=>[...prev,newEx].sort((a,b)=>tx(a.name).localeCompare(tx(b.name),"es")));
     setDayEdits(prev=>{
       const day={...prev[key]};
       const exs=[...day.exercises];
