@@ -713,6 +713,7 @@ export default function RoutineGenerator() {
   /* --- Timer de descanso --- */
   const [restTimer, setRestTimer] = useState<{secs:number;total:number;label:string}|null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const editorRef = useRef<HTMLDivElement|null>(null);
 
   /* --- Récord personal (PR) --- */
   const [prAlert, setPrAlert] = useState<{name:string;kg:number;prev:number}|null>(null);
@@ -804,6 +805,8 @@ export default function RoutineGenerator() {
   useEffect(()=>{refreshClients().catch(e=>setError(e instanceof Error?e.message:"Error"));},[authSession]);
   useEffect(()=>{if(!authSession){sessionStorage.removeItem(SESSION_KEY);return;}sessionStorage.setItem(SESSION_KEY,JSON.stringify(authSession));},[authSession]);
   useEffect(()=>{if(!clients.some(c=>c.id===selectedClientId))setSelectedClientId(clients[0]?.id??"");},[clients]);
+  // Al entrar a edición, desplazar la vista al editor para no tener que bajar manualmente.
+  useEffect(()=>{if(editingRoutine)requestAnimationFrame(()=>editorRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));},[editingRoutine]);
   useEffect(()=>{
     if(selectedClientId&&authSession?.role==="coach"){
       loadCoachNotes(selectedClientId);
@@ -880,10 +883,9 @@ export default function RoutineGenerator() {
     }catch{}
   }
 
-  function enterEditMode() {
-    if(!selectedClient?.program)return;
+  function buildDayEdits(program: Program): Record<string, DayEditState> {
     const edits:Record<string,DayEditState>={};
-    for(const week of selectedClient.program.weeks){
+    for(const week of program.weeks){
       for(const day of week.days){
         const key=`${week.weekNumber}-${day.dayIndex}`;
         edits[key]={
@@ -898,7 +900,12 @@ export default function RoutineGenerator() {
         };
       }
     }
-    setDayEdits(edits);
+    return edits;
+  }
+
+  function enterEditMode() {
+    if(!selectedClient?.program)return;
+    setDayEdits(buildDayEdits(selectedClient.program));
     setEditingRoutine(true);
     setEditError(null);
     loadExerciseLibrary();
@@ -908,23 +915,7 @@ export default function RoutineGenerator() {
 
   function enterFlowEditMode(){
     if(!flowProgram)return;
-    const edits:Record<string,DayEditState>={};
-    for(const week of flowProgram.weeks){
-      for(const day of week.days){
-        const key=`${week.weekNumber}-${day.dayIndex}`;
-        edits[key]={
-          exercises:day.selections.map((s,i)=>({
-            uid:`${s.exercise.id??s.exercise.name}-${i}`,
-            exerciseId:s.exercise.id??s.exercise.name,
-            exerciseName:s.exercise.name,
-            role:s.role as DayExerciseEdit["role"],
-            sets:s.sets,repsMin:s.repsMin,repsMax:s.repsMax,rir:s.rir,
-          })),
-          isDirty:false,
-        };
-      }
-    }
-    setDayEdits(edits);
+    setDayEdits(buildDayEdits(flowProgram));
     setEditingRoutine(true);
     setEditError(null);
     loadExerciseLibrary();
@@ -1589,6 +1580,11 @@ export default function RoutineGenerator() {
     setSelectedClientId(portalClientId);
     setFlowProgram(program);
     setCoachStep(3);
+    // Entrar directo a modo edición (sin buscar otro botón) y desplazar al editor.
+    setDayEdits(buildDayEdits(program));
+    setEditingRoutine(true);
+    setEditError(null);
+    loadExerciseLibrary();
   }
 
   /* Lista de rutinas generadas (acordeón + botones con la regla del mesociclo).
@@ -2456,7 +2452,7 @@ export default function RoutineGenerator() {
 
                 {/* Editor de rutina */}
                 {editingRoutine && (
-                  <article className="rounded-[18px] border-2 border-[#a87d49] bg-white p-6">
+                  <article ref={editorRef} className="rounded-[18px] border-2 border-[#a87d49] bg-white p-6">
                     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <h3 className="font-display text-[20px] font-semibold text-[#17120d]">Editar rutina</h3>
@@ -3088,7 +3084,7 @@ export default function RoutineGenerator() {
 
                 {/* ===== EDITOR DE RUTINA ===== */}
                 {editingRoutine && selectedClient.program && selectedClient.routineId && (
-                  <article className="rounded-[18px] border-2 border-[#a87d49] bg-white p-6">
+                  <article ref={editorRef} className="rounded-[18px] border-2 border-[#a87d49] bg-white p-6">
                     <div className="mb-5 flex items-center justify-between">
                       <div>
                         <h3 className="font-display text-[20px] font-semibold text-[#17120d]">Editar rutina</h3>
