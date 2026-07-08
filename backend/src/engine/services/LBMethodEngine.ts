@@ -222,6 +222,7 @@ export class LBMethodEngine {
         .selectForDay(
           template, library, user.experienceLevel, rng, volumeMultiplier,
           limitations, weakPoints, user.goal, weekNumber, deload, allowedEquipment, maxExPerDay,
+          user.trainingLocation === "gym",
         )
         .map((s) => ({ ...s, rir: effectiveRir }));
       return {

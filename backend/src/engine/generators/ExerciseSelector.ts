@@ -33,6 +33,23 @@ const DIFFICULTY_RANK: Record<Difficulty, number> = {
   advanced: 2,
 };
 
+/**
+ * Bodyweight exercises that still belong in a gym because they rely on apparatus
+ * (pull-up bar, dip station, hyperextension bench, hanging bar, etc.). Every other
+ * bodyweight exercise is floor calisthenics (push-ups, planks, jump squats…) and is
+ * filtered out when the client trains at a gym.
+ */
+const GYM_BODYWEIGHT_ALLOWED = new Set<string>([
+  "single-leg-hip-thrust",
+  "hyperextension-glute",
+  "nordic-curl",
+  "pull-up",
+  "chin-up",
+  "inverted-row",
+  "dips",
+  "hanging-leg-raise",
+]);
+
 /** Main-lift movement pattern preference per glute day focus. */
 const MAIN_PATTERN_BY_FOCUS: Record<string, MovementPattern[]> = {
   glute_hamstring: ["hip_hinge", "hip_thrust"],
@@ -70,13 +87,16 @@ export class ExerciseSelector {
     deload = false,
     allowedEquipment?: Equipment[],
     maxExercisesPerDay?: number,
+    gymOnly = false,
   ): SelectedExercise[] {
     const blockedPatterns = this.blockedPatterns(limitations);
     const eligible = library.filter(
       (e) =>
         DIFFICULTY_RANK[e.difficulty] <= DIFFICULTY_RANK[level] &&
         !blockedPatterns.has(e.movementPattern) &&
-        (!allowedEquipment || allowedEquipment.includes(e.equipment)),
+        (!allowedEquipment || allowedEquipment.includes(e.equipment)) &&
+        // En gimnasio, descarta calistenia de piso; conserva bodyweight con aparato.
+        (!gymOnly || e.equipment !== "bodyweight" || GYM_BODYWEIGHT_ALLOWED.has(e.id)),
     );
     const result = template.isGluteDay
       ? this.buildGluteDay(template, eligible, rng, setScale, weakPoints, goal, level, weekNumber, deload)
