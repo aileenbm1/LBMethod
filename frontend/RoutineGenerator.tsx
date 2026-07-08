@@ -2846,6 +2846,8 @@ export default function RoutineGenerator() {
                   </div>
                 </article>
 
+                {/* Mientras se edita la rutina, ocultamos las sub-tabs para no mostrar la rutina dos veces (vista + editor) */}
+                {!editingRoutine && (<>
                 {/* ===== Sub-tabs detalle asesorado ===== */}
                 <div className="flex gap-1 border-b-2 border-[#e7e1d6]">
                   {([["avance","Avance"],["rutinas","Rutinas"],["templates","Templates"],["perfil","Perfil"]] as const).map(([id,label])=>(
@@ -3079,6 +3081,7 @@ export default function RoutineGenerator() {
                     </p>
                   </article>
                 )}
+                </>)}
 
                 {/* Chat disponible como burbuja flotante (esquina inferior derecha) */}
 
