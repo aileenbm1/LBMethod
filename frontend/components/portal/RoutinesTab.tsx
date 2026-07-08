@@ -18,15 +18,20 @@ interface RoutinesTabProps {
   progress: WeeklyProgress[];
   daysPerWeek: number;
   groupProgressByMesocycles: (progress: WeeklyProgress[], daysPerWeek: number) => Mesocycle[];
+  clientName?: string;
 }
 
-export function RoutinesTab({ progress, daysPerWeek, groupProgressByMesocycles }: RoutinesTabProps) {
+export function RoutinesTab({ progress, daysPerWeek, groupProgressByMesocycles, clientName }: RoutinesTabProps) {
   const mesocycles = groupProgressByMesocycles(progress, daysPerWeek);
 
   if (mesocycles.every(m => m.weeks.length === 0)) {
     return (
-      <div className="rounded-lg border border-[#e7e1d6] bg-[#faf8f4] p-6 text-center text-[#8c8377]">
-        Sin historial de entrenamiento aún
+      <div className="rounded-lg border border-[#e7e1d6] bg-[#faf8f4] p-8 text-center">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#f0e7d8] text-[18px]">◔</div>
+        <p className="mt-3 font-semibold text-[#17120d]">Sin historial de entrenamiento aún</p>
+        <p className="mt-1 text-[13px] text-[#8c8377]">
+          Cuando {clientName?.split(" ")[0] ?? "el asesorado"} registre su primera sesión, verás aquí el progreso por mesociclo.
+        </p>
       </div>
     );
   }

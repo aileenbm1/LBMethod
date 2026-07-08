@@ -624,7 +624,8 @@ export default function RoutineGenerator() {
   const [copiedPin, setCopiedPin] = useState(false);
   /* --- Personalización Step 1/2 --- */
   const [wizGoal, setWizGoal] = useState<Goal>("glute_hypertrophy");
-  const [wizFocusMuscle, setWizFocusMuscle] = useState<FocusMuscleKey|null>(null);
+  const [wizFocusMuscle, setWizFocusMuscle] = useState<FocusMuscleKey[]>([]);
+  const MAX_FOCUS_MUSCLES = 3;
   const [wizGender, setWizGender] = useState<Gender>("unspecified");
   const [wizSessionDuration, setWizSessionDuration] = useState<SessionDuration>(60);
   const [wizTrainingLocation, setWizTrainingLocation] = useState<TrainingLocation>("gym");
@@ -661,7 +662,8 @@ export default function RoutineGenerator() {
 
   /* --- Portal --- */
   const [portalTab, setPortalTab] = useState<PortalTab>("rutina");
-  const [clientDetailTab, setClientDetailTab] = useState<"avance"|"rutinas"|"perfil">("avance");
+  const [clientDetailTab, setClientDetailTab] = useState<"avance"|"rutinas"|"templates"|"perfil">("avance");
+  const [notesWeek, setNotesWeek] = useState(1);
 
   /* --- Exercise logging --- */
   const [logWeek, setLogWeek] = useState(1);
@@ -807,6 +809,7 @@ export default function RoutineGenerator() {
       loadCoachNotes(selectedClientId);
       loadCheckIns(selectedClientId);
     }
+    setNotesWeek(1);
   },[selectedClientId]);
 
   // Precargar GIFs cuando hay un programa disponible (portal asesorado o step 3)
@@ -850,7 +853,7 @@ export default function RoutineGenerator() {
   useEffect(()=>{
     if(coachStep===2&&flowClient){
       setWizGoal(flowClient.goal);
-      setWizFocusMuscle(null);
+      setWizFocusMuscle([]);
       setWizGender(flowClient.gender??"unspecified");
       setWizSessionDuration(flowClient.sessionDuration??60);
       setWizTrainingLocation(flowClient.trainingLocation??"gym");
@@ -1475,13 +1478,14 @@ export default function RoutineGenerator() {
   async function handleStep2(){
     if(!flowClient)return;setLoading(true);setError(null);
     try{
-      // Si hay músculo en enfoque, inyectarlo como punto débil prioridad 3
-      // "upper_body" expande a los tres grupos del tren superior
-      const focusWeaks: WeakPoint[] = wizFocusMuscle === "upper_body"
-        ? [{muscleGroup:"chest",priority:3 as const},{muscleGroup:"back",priority:3 as const},{muscleGroup:"shoulders",priority:3 as const}]
-        : wizFocusMuscle
-          ? [{muscleGroup:wizFocusMuscle, priority:3 as const}]
-          : [];
+      // Músculos en enfoque (hasta MAX_FOCUS_MUSCLES), inyectados como puntos débiles.
+      // El orden de selección define la prioridad: 1º→3, 2º→2, 3º→1. "upper_body" expande a los tres grupos del tren superior.
+      const focusWeaks: WeakPoint[] = wizFocusMuscle.flatMap((key,idx)=>{
+        const priority=(idx===0?3:idx===1?2:1) as 1|2|3;
+        return key==="upper_body"
+          ? [{muscleGroup:"chest",priority},{muscleGroup:"back",priority},{muscleGroup:"shoulders",priority}]
+          : [{muscleGroup:key,priority}];
+      });
       const focusKeys = focusWeaks.map(w=>w.muscleGroup);
       const effectiveWeak: WeakPoint[] = [
         ...focusWeaks,
@@ -1492,7 +1496,7 @@ export default function RoutineGenerator() {
       const limitations:Limitation[]=wizPatterns.length>0
         ?[{description:wizLimitDesc.trim(),affectedPatterns:wizPatterns,severity:wizSeverity}]
         :[];
-      if(wizWeak.length>0||limitations.length>0||wizTrainingLocation!==flowClient.trainingLocation||wizGender!==flowClient.gender||wizSessionDuration!==flowClient.sessionDuration||wizGoal!==flowClient.goal){
+      if(effectiveWeak.length>0||limitations.length>0||wizTrainingLocation!==flowClient.trainingLocation||wizGender!==flowClient.gender||wizSessionDuration!==flowClient.sessionDuration||wizGoal!==flowClient.goal){
         await apiFetch(`/usuario/${flowClient.id}/perfil`,{
           method:"PATCH",
           headers:{"Content-Type":"application/json"},
@@ -1624,9 +1628,9 @@ export default function RoutineGenerator() {
               <div className="flex gap-2 sm:flex-nowrap">
                 <button onClick={()=>downloadRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49] hover:text-[#17120d] px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">↓ Descargar</button>
                 {!finished && (
-                  <button onClick={()=>editRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg bg-[#a87d49] hover:bg-[#9a6f3e] text-white px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">Editar</button>
+                  <button onClick={()=>editRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49] hover:text-[#17120d] px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">Editar</button>
                 )}
-                <button onClick={()=>deleteRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">Eliminar</button>
+                <button onClick={()=>deleteRoutine(routine.id)} className="flex-1 sm:flex-none rounded-lg border border-[#e0d9cc] text-[#c62828] hover:border-[#c62828] hover:bg-[#fde8e8] px-4 py-2 text-[12px] font-semibold transition whitespace-nowrap">Eliminar</button>
               </div>
             </div>
             {expanded && (
@@ -1747,7 +1751,7 @@ export default function RoutineGenerator() {
   }
 
   function logout(){setAuthSession(null);setLoginPassword("");setLoginEmail("");setLoginIdentifier("");setLoginPin("");setActiveTab("coach");resetWizard();}
-  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle(null);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");setWizInjuries(new Set());setWizMonthsTrained("");setWizWeight("");setWizAge("");setWizHomeEquipment(new Set());}
+  function resetWizard(){setCoachStep(1);setFlowClient(null);setFlowProgram(null);setUseExisting(false);setNewClientName("");setGoal("glute_hypertrophy");setLevel("intermediate");setDays(4);setClientPin("");setGeneratedPin("");setPinSaved(false);setError(null);setDuplicateWarning(null);setWizGoal("glute_hypertrophy");setWizFocusMuscle([]);setWizGender("unspecified");setWizSessionDuration(60);setWizTrainingLocation("gym");setWizWeak([]);setWizPatterns([]);setWizSeverity("mild");setWizLimitDesc("");setWizInjuries(new Set());setWizMonthsTrained("");setWizWeight("");setWizAge("");setWizHomeEquipment(new Set());}
   function copyPin(p:string){navigator.clipboard.writeText(p).then(()=>{setCopiedPin(true);setTimeout(()=>setCopiedPin(false),2500);});}
 
   const visibleTabs=[{id:"coach" as Tab,label:"Coach Studio"},{id:"clients" as Tab,label:"Asesorados"},{id:"portal" as Tab,label:"Portal"}];
@@ -2146,7 +2150,7 @@ export default function RoutineGenerator() {
                       <select className={inputCls} value={goal} onChange={e=>{
                         if(e.target.value==="__upper_body__"){
                           setGoal("muscle_gain");
-                          setWizFocusMuscle("upper_body");
+                          setWizFocusMuscle(["upper_body"]);
                         } else {
                           setGoal(e.target.value as Goal);
                         }
@@ -2321,21 +2325,26 @@ export default function RoutineGenerator() {
                 {/* Objetivo — selector filtrado por género */}
                 <div className="mt-4">
                   <span className={labelCls}>Objetivo</span>
+                  {(()=>{
+                    const isUpperBodyOnly=wizFocusMuscle.length===1&&wizFocusMuscle[0]==="upper_body";
+                    return (
                   <div className="mt-1.5 flex flex-wrap gap-2">
                     {GOALS_BY_GENDER[wizGender].map(g=>(
-                      <button key={g} onClick={()=>{setWizGoal(g);if(wizFocusMuscle==="upper_body")setWizFocusMuscle(null);}}
-                        className={`rounded-xl border px-3.5 py-2.5 text-left transition ${wizGoal===g&&wizFocusMuscle!=="upper_body"?"border-[#a87d49] bg-[#fdf8f0]":"border-[#e0d9cc] bg-white hover:border-[#c2b9aa]"}`}>
-                        <div className={`text-[13px] font-semibold ${wizGoal===g&&wizFocusMuscle!=="upper_body"?"text-[#a87d49]":"text-[#28231c]"}`}>{wizGoal===g&&wizFocusMuscle!=="upper_body"?"✓ ":""}{GOAL_LABELS[g]}</div>
+                      <button key={g} onClick={()=>{setWizGoal(g);if(isUpperBodyOnly)setWizFocusMuscle([]);}}
+                        className={`rounded-xl border px-3.5 py-2.5 text-left transition ${wizGoal===g&&!isUpperBodyOnly?"border-[#a87d49] bg-[#fdf8f0]":"border-[#e0d9cc] bg-white hover:border-[#c2b9aa]"}`}>
+                        <div className={`text-[13px] font-semibold ${wizGoal===g&&!isUpperBodyOnly?"text-[#a87d49]":"text-[#28231c]"}`}>{wizGoal===g&&!isUpperBodyOnly?"✓ ":""}{GOAL_LABELS[g]}</div>
                         {GOAL_DESCRIPTIONS[g] && <div className="mt-0.5 text-[10.5px] text-[#8c8377] max-w-[200px]">{GOAL_DESCRIPTIONS[g]}</div>}
                       </button>
                     ))}
                     {/* Enfoque tren superior — opción especial */}
-                    <button onClick={()=>{setWizGoal("muscle_gain");setWizFocusMuscle("upper_body");}}
-                      className={`rounded-xl border px-3.5 py-2.5 text-left transition ${wizFocusMuscle==="upper_body"?"border-[#a87d49] bg-[#fdf8f0]":"border-[#e0d9cc] bg-white hover:border-[#c2b9aa]"}`}>
-                      <div className={`text-[13px] font-semibold ${wizFocusMuscle==="upper_body"?"text-[#a87d49]":"text-[#28231c]"}`}>{wizFocusMuscle==="upper_body"?"✓ ":""}Enfoque tren superior</div>
+                    <button onClick={()=>{setWizGoal("muscle_gain");setWizFocusMuscle(["upper_body"]);}}
+                      className={`rounded-xl border px-3.5 py-2.5 text-left transition ${isUpperBodyOnly?"border-[#a87d49] bg-[#fdf8f0]":"border-[#e0d9cc] bg-white hover:border-[#c2b9aa]"}`}>
+                      <div className={`text-[13px] font-semibold ${isUpperBodyOnly?"text-[#a87d49]":"text-[#28231c]"}`}>{isUpperBodyOnly?"✓ ":""}Enfoque tren superior</div>
                       <div className="mt-0.5 text-[10.5px] text-[#8c8377] max-w-[200px]">Pecho, espalda y hombros como prioridad.</div>
                     </button>
                   </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Info de sesión — tarjetas pequeñas no editables aquí */}
@@ -2360,29 +2369,31 @@ export default function RoutineGenerator() {
 
                 {/* Músculo en enfoque */}
                 <div className="mt-6">
-                  <span className={labelCls}>¿En qué músculo quieres enfocarte? <span className="normal-case font-normal text-[#b3aa9b]">(opcional)</span></span>
-                  <p className="mb-3 text-[11px] text-[#a39a8d]">El motor adaptará volumen, selección de ejercicios y accesorios para priorizar ese músculo.</p>
+                  <span className={labelCls}>¿En qué músculos quieres enfocarte? <span className="normal-case font-normal text-[#b3aa9b]">(opcional, máx. {MAX_FOCUS_MUSCLES})</span></span>
+                  <p className="mb-3 text-[11px] text-[#a39a8d]">El motor adaptará volumen, selección de ejercicios y accesorios para priorizar esos músculos, en el orden en que los marques.</p>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {ALL_FOCUS_OPTIONS.map(opt=>{
-                      const active=wizFocusMuscle===opt.key;
+                      const rank=wizFocusMuscle.indexOf(opt.key);
+                      const active=rank!==-1;
+                      const atMax=!active&&wizFocusMuscle.length>=MAX_FOCUS_MUSCLES;
                       return(
-                        <button key={opt.key} onClick={()=>{
-                          if(active){setWizFocusMuscle(null);}
+                        <button key={opt.key} disabled={atMax} onClick={()=>{
+                          if(active){setWizFocusMuscle(prev=>prev.filter(k=>k!==opt.key));}
                           else{
-                            setWizFocusMuscle(opt.key);
-                            if(!GOALS_BY_GENDER[wizGender].includes(wizGoal)||wizGoal===GOALS_BY_GENDER[wizGender][0])
+                            setWizFocusMuscle(prev=>[...prev,opt.key]);
+                            if(wizFocusMuscle.length===0&&(!GOALS_BY_GENDER[wizGender].includes(wizGoal)||wizGoal===GOALS_BY_GENDER[wizGender][0]))
                               setWizGoal(opt.suggestGoal);
                           }
                         }}
-                          className={`rounded-xl border p-3 text-left transition ${active?"border-[#a87d49] bg-[#fdf8f0]":"border-[#e0d9cc] bg-white hover:border-[#c2b9aa]"}`}>
-                          <div className={`text-[13px] font-semibold ${active?"text-[#a87d49]":"text-[#28231c]"}`}>{active?"✓ ":""}{opt.label}</div>
+                          className={`rounded-xl border p-3 text-left transition ${active?"border-[#a87d49] bg-[#fdf8f0]":atMax?"cursor-not-allowed border-[#e0d9cc] bg-white opacity-40":"border-[#e0d9cc] bg-white hover:border-[#c2b9aa]"}`}>
+                          <div className={`text-[13px] font-semibold ${active?"text-[#a87d49]":"text-[#28231c]"}`}>{active?`✓ ${rank+1}. `:""}{opt.label}</div>
                           {opt.desc && <div className="mt-0.5 text-[10.5px] text-[#8c8377] leading-snug">{opt.desc}</div>}
                         </button>
                       );
                     })}
                   </div>
-                  {wizFocusMuscle && (
-                    <p className="mt-2 text-[11px] text-[#a87d49]">El objetivo se ajustará a <strong>{GOAL_LABELS[wizGoal]}</strong> para complementar el enfoque en {ALL_FOCUS_OPTIONS.find(f=>f.key===wizFocusMuscle)?.label}.</p>
+                  {wizFocusMuscle.length>0 && (
+                    <p className="mt-2 text-[11px] text-[#a87d49]">El objetivo se ajustará a <strong>{GOAL_LABELS[wizGoal]}</strong> para complementar el enfoque en {wizFocusMuscle.map(k=>ALL_FOCUS_OPTIONS.find(f=>f.key===k)?.label).join(", ")}.</p>
                   )}
                 </div>
 
@@ -2755,16 +2766,19 @@ export default function RoutineGenerator() {
 
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,0.8fr)_1.4fr]">
             <div className="flex flex-col gap-2.5">
-              {clients.map(c=>{const a=selectedClientId===c.id;return(
+              {clients.map(c=>{const a=selectedClientId===c.id;const isInactive=!!dashboardData.find(d=>d.id===c.id)?.inactive;return(
                 <button key={c.id} onClick={()=>setSelectedClientId(c.id)} className={`flex items-center gap-3 rounded-2xl border p-3.5 text-left transition ${a?"border-[#a87d49] bg-[#fdfbf7] ring-1 ring-[#a87d49]":"border-[#e7e1d6] bg-white hover:border-[#d8cdb8]"}`}>
                   <span className="flex h-[42px] w-[42px] flex-none items-center justify-center rounded-full bg-[#17120d] text-sm font-semibold text-[#f4f1ea]">{initials(c.name)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14.5px] font-semibold">{c.name}</span>
                     <span className="mt-0.5 block text-[11.5px] text-[#8c8377]">{GOAL_LABELS[c.goal]} · {LEVEL_LABELS[c.experienceLevel]}</span>
                   </span>
-                  <span className="flex-none text-right">
-                    <span className="font-display block text-[19px] font-semibold leading-none">{adherence(c)}%</span>
-                    <span className="mt-0.5 block text-[9.5px] uppercase tracking-[0.08em] text-[#a39a8d]">adherencia</span>
+                  <span className="flex flex-none items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 flex-none rounded-full ${isInactive?"bg-[#c62828]":"bg-[#5f7a4f]"}`}/>
+                    <span className="text-right">
+                      <span className="font-display block text-[19px] font-semibold leading-none">{adherence(c)}%</span>
+                      <span className="mt-0.5 block text-[9.5px] uppercase tracking-[0.08em] text-[#a39a8d]">ADH.</span>
+                    </span>
                   </span>
                 </button>
               );})}
@@ -2773,7 +2787,10 @@ export default function RoutineGenerator() {
               {/* Alertas de inactividad */}
               {dashboardData.filter(d=>d.inactive).length>0 && (
                 <div className="rounded-[16px] border border-[#f5c6c6] bg-[#fff5f5] p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#c62828] mb-2">Sin entrenar +7 días</div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#c62828]">Sin entrenar +7 días</span>
+                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#c62828] px-1 text-[10px] font-bold text-white">{dashboardData.filter(d=>d.inactive).length}</span>
+                  </div>
                   {dashboardData.filter(d=>d.inactive).map(d=>(
                     <div key={d.id} className="flex items-center justify-between py-1.5">
                       <span className="text-[13px] font-semibold">{d.name}</span>
@@ -2791,17 +2808,31 @@ export default function RoutineGenerator() {
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <h2 className="font-display text-[27px] font-semibold">{selectedClient.name}</h2>
-                      <p className="mt-1 text-[13px] text-[#8c8377]">{GOAL_LABELS[selectedClient.goal]} · {LEVEL_LABELS[selectedClient.experienceLevel]} · {selectedClient.daysPerWeek} días/sem</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <span className="rounded-full bg-[#f0e7d8] px-2.5 py-1 text-[10px] font-semibold text-[#8f6a3c]">◆ {GOAL_LABELS[selectedClient.goal]}</span>
+                        <span className="rounded-full bg-[#f0e7d8] px-2.5 py-1 text-[10px] font-semibold text-[#8f6a3c]">{LEVEL_LABELS[selectedClient.experienceLevel]}</span>
+                        <span className="rounded-full bg-[#f0e7d8] px-2.5 py-1 text-[10px] font-semibold text-[#8f6a3c]">{selectedClient.daysPerWeek}días/semana</span>
+                      </div>
                     </div>
-                    <div className="min-w-[170px]">
-                      <div className="mb-1.5 flex justify-between text-[11px] uppercase tracking-wide text-[#a39a8d]"><span>Adherencia</span><span>{adherence(selectedClient)}%</span></div>
-                      <div className="h-[7px] overflow-hidden rounded-full bg-[#ece6db]"><div className="h-full rounded-full bg-[#a87d49] transition-all" style={{width:`${adherence(selectedClient)}%`}}/></div>
+                    <div className="flex flex-none items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-[11px] uppercase tracking-wide text-[#a39a8d]">Adherencia</div>
+                        <div className="font-display text-[22px] font-semibold leading-none">{adherence(selectedClient)}%</div>
+                      </div>
+                      <div className="relative flex h-11 w-11 flex-none items-center justify-center">
+                        <svg className="absolute inset-0 -rotate-90" viewBox="0 0 44 44">
+                          <circle cx="22" cy="22" r="18" fill="none" stroke="#ece6db" strokeWidth="5"/>
+                          <circle cx="22" cy="22" r="18" fill="none" stroke="#a87d49" strokeWidth="5"
+                            strokeDasharray={`${2*Math.PI*18}`}
+                            strokeDashoffset={`${2*Math.PI*18*(1-adherence(selectedClient)/100)}`}
+                            strokeLinecap="round" style={{transition:"stroke-dashoffset 0.6s ease"}}/>
+                        </svg>
+                      </div>
                     </div>
                   </div>
 
                   {/* Acciones */}
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {selectedClient.program && <button onClick={()=>downloadPdf(selectedClient,selectedClient.program!)} className={`px-4 py-2.5 text-[12.5px] ${ghostBtn}`}>↓ Descargar PDF</button>}
                     {selectedClient.program && !editingRoutine && (
                       <button onClick={enterEditMode} className={`px-4 py-2.5 text-[12.5px] ${primaryBtn}`}>✏ Editar rutina</button>
                     )}
@@ -2813,14 +2844,15 @@ export default function RoutineGenerator() {
                         <button onClick={exitEditMode} className={`px-4 py-2.5 text-[12.5px] ${ghostBtn}`}>✕ Cancelar</button>
                       </>
                     )}
-                    <button onClick={()=>{setFlowClient(selectedClient);setCoachStep(4);setActiveTab("coach");}} className={`px-4 py-2.5 text-[12.5px] ${ghostBtn}`}>⚙ PIN</button>
                     {!selectedClient.program && <button onClick={()=>{setFlowClient(selectedClient);setGoal(selectedClient.goal);setLevel(selectedClient.experienceLevel);setDays(selectedClient.daysPerWeek);setCoachStep(2);setActiveTab("coach");}} className={`px-4 py-2.5 text-[12.5px] ${primaryBtn}`}>Generar rutina</button>}
+                    {selectedClient.program && <button onClick={()=>downloadPdf(selectedClient,selectedClient.program!)} className={`px-4 py-2.5 text-[12.5px] ${ghostBtn}`}>↓ Descargar PDF</button>}
+                    <button onClick={()=>{setFlowClient(selectedClient);setCoachStep(4);setActiveTab("coach");}} className={`px-4 py-2.5 text-[12.5px] ${ghostBtn}`}>📍 PIN</button>
                   </div>
                 </article>
 
                 {/* ===== Sub-tabs detalle asesorado ===== */}
                 <div className="flex gap-1 border-b-2 border-[#e7e1d6]">
-                  {([["avance","Avance"],["rutinas","Rutinas"],["perfil","Perfil"]] as const).map(([id,label])=>(
+                  {([["avance","Avance"],["rutinas","Rutinas"],["templates","Templates"],["perfil","Perfil"]] as const).map(([id,label])=>(
                     <button key={id} onClick={()=>setClientDetailTab(id)}
                       className={`px-5 py-3 text-[13.5px] font-semibold transition border-b-2 -mb-[2px] ${clientDetailTab===id?"border-[#a87d49] text-[#a87d49]":"border-transparent text-[#8c8377] hover:text-[#17120d]"}`}>
                       {label}
@@ -2831,7 +2863,17 @@ export default function RoutineGenerator() {
                 {/* ========== AVANCE ========== */}
                 {clientDetailTab==="avance" && (<>
                 {/* Gráficas y métricas */}
-                {selectedClient.program && (()=>{
+                {(()=>{
+                  const totalSessions=selectedClient.progress.reduce((s,p)=>s+p.completedSessions,0);
+                  if(!selectedClient.program||totalSessions===0){
+                    return (
+                      <div className="rounded-[18px] border border-[#e7e1d6] bg-white p-10 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#f0e7d8] text-[20px]">◔</div>
+                        <p className="mt-4 font-display text-[16px] font-semibold">Aún no hay datos de avance</p>
+                        <p className="mt-1 text-[13px] text-[#8c8377]">La adherencia y las métricas aparecerán tras las primeras sesiones.</p>
+                      </div>
+                    );
+                  }
                   const weeks=selectedClient.program!.weeks;
                   const progByWeek=new Map(selectedClient.progress.map(p=>[p.weekNumber,p]));
                   const recent=weeks.slice(-6);
@@ -2843,7 +2885,6 @@ export default function RoutineGenerator() {
                   });
                   let running=0;
                   const strengthData=volumeData.map(d=>{running+=d.value;return {label:d.label,value:running};});
-                  const totalSessions=selectedClient.progress.reduce((s,p)=>s+p.completedSessions,0);
                   const firstVol=volumeData.find(d=>d.value>0)?.value??0;
                   const lastVol=volumeData.length>0?volumeData[volumeData.length-1].value:0;
                   const deltaPct=firstVol>0?Math.round(((lastVol-firstVol)/firstVol)*100):0;
@@ -2927,37 +2968,27 @@ export default function RoutineGenerator() {
                 {/* Seguimiento por mesociclos */}
                 <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
                   <h3 className="font-display text-[18px] font-semibold mb-4">Seguimiento por mesociclos</h3>
-                  <RoutinesTab progress={selectedClient.progress} daysPerWeek={selectedClient.daysPerWeek} groupProgressByMesocycles={groupProgressByMesocycles}/>
+                  <RoutinesTab progress={selectedClient.progress} daysPerWeek={selectedClient.daysPerWeek} groupProgressByMesocycles={groupProgressByMesocycles} clientName={selectedClient.name}/>
                 </article>
-
-                {/* Templates — acceso rápido */}
-                {templates.length>0 && (
-                  <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
-                    <h3 className="font-display text-[17px] font-semibold mb-4">Templates de rutinas</h3>
-                    <div className="flex flex-col gap-2">
-                      {templates.map(t=>(
-                        <div key={t.id} className="flex items-center justify-between rounded-[14px] border border-[#ece6db] px-4 py-3">
-                          <div>
-                            <div className="text-[13px] font-semibold">{t.name}</div>
-                            <div className="text-[11px] text-[#a39a8d]">{GOAL_LABELS[t.goal as Goal]??t.goal} · {t.level} · {t.daysPerWeek}d · {t.totalWeeks} sem</div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={()=>{setApplyingTemplate(t);setShowApplyModal(true);}} className={`px-3 py-1.5 text-[12px] ${primaryBtn}`}>Aplicar</button>
-                            <button onClick={()=>deleteTemplate(t.id)} className="px-2.5 py-1.5 text-[12px] text-[#c62828] hover:bg-[#fde8e8] rounded-xl transition">✕</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                )}
 
                 {/* Notas del coach por sesión */}
                 {selectedClient.program && (
                   <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
-                    <h3 className="font-display text-[17px] font-semibold mb-4">Notas por sesión</h3>
+                    <div className="mb-1 flex items-center justify-between">
+                      <h3 className="font-display text-[17px] font-semibold">Notas por sesión</h3>
+                      <span className="text-[11px] text-[#a39a8d]">Sem {notesWeek} de {selectedClient.program.weeks.length}</span>
+                    </div>
                     <p className="text-[12px] text-[#8c8377] mb-4">Deja feedback en cada día de entrenamiento. El asesorado lo verá en su historial.</p>
+                    <div className="mb-4 flex flex-wrap gap-1.5">
+                      {selectedClient.program.weeks.map(w=>(
+                        <button key={w.weekNumber} onClick={()=>setNotesWeek(w.weekNumber)}
+                          className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${notesWeek===w.weekNumber?"bg-[#17120d] text-white":"border border-[#e0d9cc] text-[#8c8377] hover:border-[#a87d49]"}`}>
+                          Semana {w.weekNumber}
+                        </button>
+                      ))}
+                    </div>
                     <div className="flex flex-col gap-3">
-                      {selectedClient.program.weeks.flatMap(w=>w.days.map(d=>{
+                      {selectedClient.program.weeks.filter(w=>w.weekNumber===notesWeek).flatMap(w=>w.days.map(d=>{
                         const key=`${w.weekNumber}-${d.dayIndex}`;
                         const existingNote=coachNotes[key]??"";
                         const isEditing=editingNote?.key===key;
@@ -2997,17 +3028,48 @@ export default function RoutineGenerator() {
 
                 </>)}
 
+                {/* ========== TEMPLATES ========== */}
+                {clientDetailTab==="templates" && (
+                  <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="font-display text-[18px] font-semibold">Templates de rutinas</h3>
+                      <span className="text-[12px] text-[#8c8377]">{templates.length} disponible{templates.length!==1?'s':''}</span>
+                    </div>
+                    {templates.length===0
+                      ? <div className="rounded-lg border border-dashed border-[#d8cdb8] bg-white p-8 text-center">
+                          <p className="text-[14px] text-[#8c8377]">Aún no has guardado ningún template</p>
+                          <p className="text-[12px] text-[#a39a8d] mt-2">Guarda una rutina como template desde el editor para reutilizarla con otros asesorados.</p>
+                        </div>
+                      : <div className="grid gap-3 sm:grid-cols-2">
+                          {templates.map(t=>(
+                            <div key={t.id} className="rounded-[16px] border border-[#ece6db] p-4">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-[#f0e7d8] text-[14px] text-[#8f6a3c]">◆</div>
+                                <button onClick={()=>deleteTemplate(t.id)} className="text-[12px] text-[#c2b9aa] hover:text-[#c62828] transition">✕</button>
+                              </div>
+                              <div className="mt-3 text-[14px] font-semibold">{t.name}</div>
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                <span className="rounded-full bg-[#f0e7d8] px-2 py-0.5 text-[10px] font-semibold text-[#8f6a3c]">{GOAL_LABELS[t.goal as Goal]??t.goal}</span>
+                                <span className="rounded-full bg-[#f0e7d8] px-2 py-0.5 text-[10px] font-semibold text-[#8f6a3c]">{LEVEL_LABELS[t.level as Level]??t.level}</span>
+                                <span className="rounded-full bg-[#f0e7d8] px-2 py-0.5 text-[10px] font-semibold text-[#8f6a3c]">{t.daysPerWeek} días</span>
+                                <span className="rounded-full bg-[#f0e7d8] px-2 py-0.5 text-[10px] font-semibold text-[#8f6a3c]">{t.totalWeeks} sem</span>
+                              </div>
+                              <button onClick={()=>{setApplyingTemplate(t);setShowApplyModal(true);}} className={`mt-3 w-full py-2 text-[12.5px] ${primaryBtn}`}>Aplicar</button>
+                            </div>
+                          ))}
+                        </div>}
+                  </article>
+                )}
+
                 {/* ========== PERFIL ========== */}
                 {clientDetailTab==="perfil" && (
                   <article className="rounded-[18px] border border-[#e7e1d6] bg-white p-6">
                     <h3 className="font-display text-[18px] font-semibold mb-5">Perfil del asesorado</h3>
                     <div className="grid gap-4 sm:grid-cols-2">
                       {([
-                        ["Nombre", selectedClient.name],
                         ["Objetivo", GOAL_LABELS[selectedClient.goal]],
                         ["Nivel", LEVEL_LABELS[selectedClient.experienceLevel]],
-                        ["Días por semana", `${selectedClient.daysPerWeek} días`],
-                        ["Email", selectedClient.email?.includes("@lbmethod.local") ? "— sin email —" : (selectedClient.email ?? "—")],
+                        ["Frecuencia", `${selectedClient.daysPerWeek} días / semana`],
                         ["Adherencia", `${adherence(selectedClient)}%`],
                       ] as [string,string][]).map(([label,value])=>(
                         <div key={label} className="rounded-[13px] border border-[#ece6db] bg-[#faf8f4] p-4">
@@ -3016,6 +3078,9 @@ export default function RoutineGenerator() {
                         </div>
                       ))}
                     </div>
+                    <p className="mt-4 text-[12px] text-[#a39a8d]">
+                      Email: {selectedClient.email?.includes("@lbmethod.local") ? "— sin email —" : (selectedClient.email ?? "—")}
+                    </p>
                   </article>
                 )}
 
