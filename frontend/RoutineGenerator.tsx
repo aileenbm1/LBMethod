@@ -625,7 +625,7 @@ export default function RoutineGenerator() {
   /* --- Personalización Step 1/2 --- */
   const [wizGoal, setWizGoal] = useState<Goal>("glute_hypertrophy");
   const [wizFocusMuscle, setWizFocusMuscle] = useState<FocusMuscleKey[]>([]);
-  const MAX_FOCUS_MUSCLES = 3;
+  const MAX_FOCUS_MUSCLES = 5;
   const [wizGender, setWizGender] = useState<Gender>("unspecified");
   const [wizSessionDuration, setWizSessionDuration] = useState<SessionDuration>(60);
   const [wizTrainingLocation, setWizTrainingLocation] = useState<TrainingLocation>("gym");
