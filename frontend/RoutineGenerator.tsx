@@ -642,6 +642,7 @@ export default function RoutineGenerator() {
   /* --- Clients --- */
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [clientListCollapsed, setClientListCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("coach");
   const [clientRoutines, setClientRoutines] = useState<Array<{id:string;createdAt:string;goal:string;weekNumber?:number}>>([]);
   const [expandedRoutineId, setExpandedRoutineId] = useState<string|null>(null);
@@ -2760,10 +2761,26 @@ export default function RoutineGenerator() {
               }
             </div>
 
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,0.8fr)_1.4fr]">
-            <div className="flex flex-col gap-2.5">
-              {clients.map(c=>{const a=selectedClientId===c.id;const isInactive=!!dashboardData.find(d=>d.id===c.id)?.inactive;return(
-                <button key={c.id} onClick={()=>setSelectedClientId(c.id)} className={`flex items-center gap-3 rounded-2xl border p-3.5 text-left transition ${a?"border-[#a87d49] bg-[#fdfbf7] ring-1 ring-[#a87d49]":"border-[#e7e1d6] bg-white hover:border-[#d8cdb8]"}`}>
+            <div className={`grid items-start gap-6 ${clientListCollapsed&&selectedClient?"lg:grid-cols-[72px_1fr]":"lg:grid-cols-[minmax(260px,0.8fr)_1.4fr]"}`}>
+            <div className={clientListCollapsed&&selectedClient?"flex flex-col items-center gap-2":"flex flex-col gap-2.5"}>
+              {clientListCollapsed&&selectedClient && (
+                <button onClick={()=>setClientListCollapsed(false)} title="Ver lista de asesorados"
+                  className="mb-1 flex h-9 w-9 flex-none items-center justify-center rounded-xl border border-[#e0d9cc] text-[#8c8377] transition hover:border-[#a87d49] hover:text-[#a87d49]">
+                  ☰
+                </button>
+              )}
+              {clients.map(c=>{const a=selectedClientId===c.id;const isInactive=!!dashboardData.find(d=>d.id===c.id)?.inactive;
+                if(clientListCollapsed&&selectedClient){
+                  return (
+                    <button key={c.id} onClick={()=>setSelectedClientId(c.id)} title={c.name}
+                      className={`relative flex h-[42px] w-[42px] flex-none items-center justify-center rounded-full text-sm font-semibold transition ${a?"bg-[#a87d49] text-white ring-2 ring-[#a87d49] ring-offset-2":"bg-[#17120d] text-[#f4f1ea] hover:opacity-80"}`}>
+                      {initials(c.name)}
+                      <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white ${isInactive?"bg-[#c62828]":"bg-[#5f7a4f]"}`}/>
+                    </button>
+                  );
+                }
+                return(
+                <button key={c.id} onClick={()=>{setSelectedClientId(c.id);setClientListCollapsed(true);}} className={`flex items-center gap-3 rounded-2xl border p-3.5 text-left transition ${a?"border-[#a87d49] bg-[#fdfbf7] ring-1 ring-[#a87d49]":"border-[#e7e1d6] bg-white hover:border-[#d8cdb8]"}`}>
                   <span className="flex h-[42px] w-[42px] flex-none items-center justify-center rounded-full bg-[#17120d] text-sm font-semibold text-[#f4f1ea]">{initials(c.name)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14.5px] font-semibold">{c.name}</span>
@@ -2781,7 +2798,7 @@ export default function RoutineGenerator() {
               {clients.length===0 && <div className="rounded-2xl border border-dashed border-[#dcd4c5] p-6 text-center"><p className="text-sm text-[#a39a8d]">Sin asesorados aún.</p><button onClick={()=>setActiveTab("coach")} className={`mt-3 px-5 py-2.5 text-sm ${primaryBtn}`}>+ Agregar</button></div>}
 
               {/* Alertas de inactividad */}
-              {dashboardData.filter(d=>d.inactive).length>0 && (
+              {!(clientListCollapsed&&selectedClient) && dashboardData.filter(d=>d.inactive).length>0 && (
                 <div className="rounded-[16px] border border-[#f5c6c6] bg-[#fff5f5] p-4">
                   <div className="mb-2 flex items-center gap-2">
                     <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#c62828]">Sin entrenar +7 días</span>
