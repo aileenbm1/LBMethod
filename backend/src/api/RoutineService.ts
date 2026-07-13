@@ -579,7 +579,39 @@ export class RoutineService {
     volumeBias?: number,
   ): Promise<StoredProgram> {
     const library = await this.repo.all();
-    const program = this.engine.generateProgram(profile, library, weeks, { seed, volumeBias });
+    const prisma = this.prisma;
+
+    // Si el cliente ya tenía un mesociclo activo con el mismo objetivo y el mismo
+    // conjunto de músculos en enfoque, anclar la generación a esa rutina: el motor
+    // conserva los ejercicios que sigan siendo elegibles y solo sustituye los que ya
+    // no lo son (nueva lesión, cambio de lugar de entreno).
+    let existingActive: Awaited<ReturnType<PrismaClient["workout"]["findFirst"]>> | null = null;
+    let anchorRoutine: GeneratedRoutine | undefined;
+    if (clientId && prisma) {
+      const activeName = `client:${clientId}:active`;
+      existingActive = await prisma.workout.findFirst({ where: { name: activeName }, orderBy: { createdAt: "desc" } });
+      const prevPayload = existingActive?.payload as {
+        program?: GeneratedProgram;
+        profileSnapshot?: { goal: string; daysPerWeek: number; weakPointGroups: string[] };
+      } | undefined;
+      const prevSnapshot = prevPayload?.profileSnapshot;
+      if (prevPayload?.program && prevSnapshot) {
+        const currentGroups = (profile.weakPoints ?? []).map((w) => w.muscleGroup).slice().sort();
+        const sameFocus =
+          prevSnapshot.goal === profile.goal &&
+          prevSnapshot.daysPerWeek === profile.daysPerWeek &&
+          prevSnapshot.weakPointGroups.length === currentGroups.length &&
+          prevSnapshot.weakPointGroups.every((g, i) => g === currentGroups[i]);
+        if (sameFocus) anchorRoutine = prevPayload.program.weeks[0];
+      }
+    }
+
+    const program = this.engine.generateProgram(profile, library, weeks, { seed, volumeBias, anchorRoutine });
+    const profileSnapshot = {
+      goal: profile.goal,
+      daysPerWeek: profile.daysPerWeek,
+      weakPointGroups: (profile.weakPoints ?? []).map((w) => w.muscleGroup).slice().sort(),
+    };
     const stored: StoredProgram = {
       id: randomUUID(),
       clientId,
@@ -596,7 +628,6 @@ export class RoutineService {
         progress: [],
       };
 
-      const prisma = this.prisma;
       if (prisma) {
         const activeName = `client:${clientId}:active`;
         const routineName = `routine:${stored.id}`;
@@ -606,12 +637,8 @@ export class RoutineService {
           progress: [],
           clientId,
           usedSignatures: stored.usedSignatures,
+          profileSnapshot,
         };
-
-        const existingActive = await prisma.workout.findFirst({
-          where: { name: activeName },
-          orderBy: { createdAt: "desc" },
-        });
 
         if (existingActive) {
           await prisma.workout.update({

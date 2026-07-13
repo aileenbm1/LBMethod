@@ -99,13 +99,28 @@ export class LBMethodEngine {
     const progression = this.progression.buildMesocycle();
     const weeks: GeneratedRoutine[] = [];
 
-    // Generate week 1 as the template (same exercises for all weeks in this mesocycle)
-    const templateRoutine = this.generateRoutine(user, library, {
-      ...options,
-      weekNumber: 1,
-      usedSignatures: options.usedSignatures,
-      volumeBias: options.volumeBias,
-    });
+    // Si viene un ancla (mesociclo anterior del mismo cliente, mismo objetivo/enfoque),
+    // reconciliar en vez de generar desde cero: conserva los ejercicios que sigan siendo
+    // elegibles y solo sustituye los que ya no lo son (nueva lesión, cambio de equipo/lugar).
+    let templateRoutine = options.anchorRoutine
+      ? this.reconcileAnchor(options.anchorRoutine, user, library)
+      : this.generateRoutine(user, library, {
+          ...options,
+          weekNumber: 1,
+          usedSignatures: options.usedSignatures,
+          volumeBias: options.volumeBias,
+        });
+
+    // Red de seguridad: si la reconciliación no queda válida, generar desde cero.
+    if (options.anchorRoutine && !this.validator.validate(templateRoutine).valid) {
+      templateRoutine = this.generateRoutine(user, library, {
+        ...options,
+        weekNumber: 1,
+        usedSignatures: options.usedSignatures,
+        volumeBias: options.volumeBias,
+      });
+    }
+
     weeks.push(templateRoutine);
 
     // Weeks 2-N reuse week 1's EXACT exercises. Only RIR, deload flag and (on a
@@ -130,6 +145,75 @@ export class LBMethodEngine {
   }
 
   // ---- internals ----------------------------------------------------------
+
+  /**
+   * Reconcile a previous mesocycle's week-1 template against the client's
+   * *current* constraints. Every exercise that's still eligible (difficulty,
+   * limitations, equipment, gym-only floor-calisthenics rule) is kept exactly
+   * as-is; anything that's no longer eligible (new injury, switched from gym
+   * to home, etc.) is swapped for the highest-activation exercise that shares
+   * its movement pattern and primary muscle. Sets/reps/method/role are always
+   * preserved from the original slot — only *which* exercise fills it changes.
+   */
+  private reconcileAnchor(anchor: GeneratedRoutine, user: UserProfile, library: Exercise[]): GeneratedRoutine {
+    const blockedPatterns = this.selector.blockedPatterns(user.limitations ?? []);
+    const allowedEquipment: Equipment[] | undefined =
+      user.trainingLocation === "home"
+        ? (user.homeEquipment && user.homeEquipment.length > 0 ? user.homeEquipment : HOME_EQUIPMENT)
+        : undefined;
+    const gymOnly = user.trainingLocation === "gym";
+    const level = user.experienceLevel;
+
+    const days: GeneratedDay[] = anchor.days.map((day) => {
+      const usedToday = new Set(day.selections.map((s) => s.exercise.id));
+      const selections: SelectedExercise[] = [];
+      for (const sel of day.selections) {
+        if (this.selector.isEligible(sel.exercise, level, blockedPatterns, allowedEquipment, gymOnly)) {
+          selections.push(sel);
+          continue;
+        }
+        // Primero intenta un reemplazo del mismo patrón (mejor sustituto cuando la
+        // razón fue equipo/lugar). Si el patrón en sí está bloqueado (lesión), nunca
+        // habrá candidatos ahí, así que amplía a "mismo músculo, cualquier patrón".
+        const sameMuscleEligible = library.filter(
+          (e) =>
+            e.primaryMuscle === sel.exercise.primaryMuscle &&
+            !usedToday.has(e.id) &&
+            this.selector.isEligible(e, level, blockedPatterns, allowedEquipment, gymOnly),
+        );
+        const replacement =
+          sameMuscleEligible
+            .filter((e) => e.movementPattern === sel.exercise.movementPattern)
+            .sort((a, b) => b.activationScore - a.activationScore)[0] ??
+          sameMuscleEligible.sort((a, b) => b.activationScore - a.activationScore)[0];
+        // Si no hay reemplazo válido, se descarta el ejercicio de este día (igual
+        // que el truncado por maxExercisesPerDay que ya hace selectForDay).
+        if (replacement) {
+          selections.push({ ...sel, exercise: replacement });
+          usedToday.add(replacement.id);
+        }
+      }
+      return {
+        dayIndex: day.dayIndex,
+        focus: day.focus,
+        selections,
+        sessionFatigue: this.fatigue.sessionFatigue(selections),
+        totalSets: selections.reduce((sum, s) => sum + s.sets, 0),
+      };
+    });
+
+    return {
+      goal: user.goal,
+      level: user.experienceLevel,
+      daysPerWeek: user.daysPerWeek,
+      weekNumber: 1,
+      rir: anchor.rir,
+      deload: anchor.deload,
+      volume: anchor.volume,
+      days,
+      signature: signatureFor(days),
+    };
+  }
 
   /**
    * Build a later week of the mesocycle from the week-1 template. Keeps the

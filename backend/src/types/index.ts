@@ -255,4 +255,11 @@ export interface GenerateOptions {
    * Rango recomendado: 0.80 – 1.15
    */
   volumeBias?: number;
+  /**
+   * Semana 1 del mesociclo anterior del mismo cliente. Si viene presente y el
+   * objetivo/enfoque no cambiaron, el motor reconcilia esta rutina (conserva los
+   * ejercicios que sigan siendo elegibles, sustituye solo los que ya no lo son)
+   * en vez de generar una combinación nueva desde cero.
+   */
+  anchorRoutine?: GeneratedRoutine;
 }

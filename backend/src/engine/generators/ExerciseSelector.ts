@@ -90,22 +90,37 @@ export class ExerciseSelector {
     gymOnly = false,
   ): SelectedExercise[] {
     const blockedPatterns = this.blockedPatterns(limitations);
-    const eligible = library.filter(
-      (e) =>
-        DIFFICULTY_RANK[e.difficulty] <= DIFFICULTY_RANK[level] &&
-        !blockedPatterns.has(e.movementPattern) &&
-        (!allowedEquipment || allowedEquipment.includes(e.equipment)) &&
-        // En gimnasio, descarta calistenia de piso; conserva bodyweight con aparato.
-        (!gymOnly || e.equipment !== "bodyweight" || GYM_BODYWEIGHT_ALLOWED.has(e.id)),
-    );
+    const eligible = library.filter((e) => this.isEligible(e, level, blockedPatterns, allowedEquipment, gymOnly));
     const result = template.isGluteDay
       ? this.buildGluteDay(template, eligible, rng, setScale, weakPoints, goal, level, weekNumber, deload)
       : this.buildSupportDay(template, eligible, rng, setScale, weakPoints, goal, level, weekNumber, deload);
     return maxExercisesPerDay ? result.slice(0, maxExercisesPerDay) : result;
   }
 
+  /**
+   * Whether an exercise is usable for this client: within difficulty range, not
+   * blocked by an injury, available with the allowed equipment, and (in a gym)
+   * not floor calisthenics. Shared by `selectForDay` and by the mesocycle
+   * anchor-reconciliation path in `LBMethodEngine`.
+   */
+  isEligible(
+    exercise: Exercise,
+    level: ExperienceLevel,
+    blockedPatterns: Set<MovementPattern>,
+    allowedEquipment?: Equipment[],
+    gymOnly = false,
+  ): boolean {
+    return (
+      DIFFICULTY_RANK[exercise.difficulty] <= DIFFICULTY_RANK[level] &&
+      !blockedPatterns.has(exercise.movementPattern) &&
+      (!allowedEquipment || allowedEquipment.includes(exercise.equipment)) &&
+      // En gimnasio, descarta calistenia de piso; conserva bodyweight con aparato.
+      (!gymOnly || exercise.equipment !== "bodyweight" || GYM_BODYWEIGHT_ALLOWED.has(exercise.id))
+    );
+  }
+
   /** Patterns blocked by moderate or severe limitations. */
-  private blockedPatterns(limitations: Limitation[]): Set<MovementPattern> {
+  blockedPatterns(limitations: Limitation[]): Set<MovementPattern> {
     const blocked = new Set<MovementPattern>();
     for (const lim of limitations) {
       if (lim.severity === "mild") continue;

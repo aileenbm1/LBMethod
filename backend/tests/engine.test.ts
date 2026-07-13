@@ -41,11 +41,45 @@ describe("LBMethodEngine (integration)", () => {
     }
   });
 
-  it("produces unique weekly combinations across the mesocycle", () => {
+  it("keeps the same exercises across every week of the mesocycle", () => {
     const user: UserProfile = { goal: "glute_hypertrophy", experienceLevel: "intermediate", daysPerWeek: 5 };
     const program = engine.generateProgram(user, EXERCISE_LIBRARY, 4, { seed: 42 });
     const signatures = program.weeks.map((w) => w.signature);
-    expect(new Set(signatures).size).toBe(signatures.length);
+    // Semana 4 es deload (menos series) pero los ejercicios son los mismos, así
+    // que la firma (basada solo en ids de ejercicio) debe repetirse las 4 semanas.
+    expect(new Set(signatures).size).toBe(1);
+  });
+
+  it("keeps the same exercises when regenerating with an unchanged profile (anchor)", () => {
+    const user: UserProfile = { goal: "glute_hypertrophy", experienceLevel: "intermediate", daysPerWeek: 4 };
+    const first = engine.generateProgram(user, EXERCISE_LIBRARY, 4, { seed: 55 });
+    const anchored = engine.generateProgram(user, EXERCISE_LIBRARY, 4, { anchorRoutine: first.weeks[0] });
+    expect(anchored.weeks[0].signature).toBe(first.weeks[0].signature);
+  });
+
+  it("only substitutes exercises blocked by a new limitation when anchoring", () => {
+    const user: UserProfile = { goal: "glute_hypertrophy", experienceLevel: "intermediate", daysPerWeek: 4 };
+    const baseline = engine.generateProgram(user, EXERCISE_LIBRARY, 4, { seed: 55 });
+    const anchor = baseline.weeks[0];
+    const blockedPattern = anchor.days[0].selections[0].exercise.movementPattern;
+
+    const restrictedUser: UserProfile = {
+      ...user,
+      limitations: [{ description: "test", affectedPatterns: [blockedPattern], severity: "severe" }],
+    };
+    const reconciled = engine.generateProgram(restrictedUser, EXERCISE_LIBRARY, 4, { anchorRoutine: anchor }).weeks[0];
+
+    for (const day of anchor.days) {
+      const reconciledDay = reconciled.days.find((d) => d.dayIndex === day.dayIndex)!;
+      for (const sel of day.selections) {
+        const kept = reconciledDay.selections.find((s) => s.role === sel.role && s.order === sel.order);
+        if (sel.exercise.movementPattern === blockedPattern) {
+          expect(kept?.exercise.id).not.toBe(sel.exercise.id);
+        } else {
+          expect(kept?.exercise.id).toBe(sel.exercise.id);
+        }
+      }
+    }
   });
 
   it("generates valid programs across goals, levels and day counts", () => {
